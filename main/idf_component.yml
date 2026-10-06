@@ -1,0 +1,3 @@
+dependencies:
+  espressif/esp-zigbee-lib: "*"
+  espressif/esp-zboss-lib: "*"
