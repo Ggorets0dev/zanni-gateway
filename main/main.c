@@ -6,27 +6,12 @@
 #include "driver/gpio.h"
 #include "esp_random.h"
 
+#include "common.h"
 #include "led_task.h"
 #include "zigbee_init.h"
 #include "wifi_init.h"
 
 static const char *TAG = "main";
-
-void task1(void *pvParameter)
-{
-    while(1) {
-        ESP_LOGI(TAG, "Task 1 is running...");
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-}
-
-void task2(void *pvParameter)
-{
-    while(1) {
-        ESP_LOGI(TAG, "Task 2 is running...");
-        vTaskDelay(pdMS_TO_TICKS(2000));
-    }
-}
 
 static void zanni_nvs_flash_init(void)
 {
@@ -43,16 +28,13 @@ void app_main(void)
 {
     ESP_LOGI(TAG, "Starting FreeRTOS test tasks...");
 
+    static system_status_t system_status = {0};
+
     zanni_nvs_flash_init();
 
-    zanni_zigbee_init();
-
-    // Create Task 1
-    xTaskCreate(&task1, "task1", 2048, NULL, 5, NULL);
-    
-    // Create Task 2
-    xTaskCreate(&task2, "task2", 2048, NULL, 5, NULL);
+    zanni_wifi_init(&system_status);
+    // zanni_zigbee_init();
     
     // Create Blink Task
-    xTaskCreate(&led_task, "led_task", 2048, NULL, 5, NULL);
+    xTaskCreate(&led_task, "led_task", 2048, &system_status, 5, NULL);
 }
