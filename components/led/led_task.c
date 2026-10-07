@@ -82,12 +82,12 @@ void led_task(void *pvParameter)
             if (system_status->is_wifi_ok)
             {
                 led_strip_set_pixel(led_strip, 0, KA_RED_LVL, KA_GREEN_LVL, KA_BLUE_LVL);
-                ESP_LOGI(TAG, "Turning keep alive LED ON");
+                // ESP_LOGI(TAG, "Turning keep alive LED ON");
             }
             else
             {
                 led_strip_set_pixel(led_strip, 0, ERR_RED_LVL, ERR_GREEN_LVL, ERR_BLUE_LVL);
-                ESP_LOGI(TAG, "Turning error LED ON");
+                // ESP_LOGI(TAG, "Turning error LED ON");
             }
 
             led_strip_refresh(led_strip);

@@ -3,12 +3,12 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
-#include "driver/gpio.h"
 #include "esp_random.h"
 
 #include "common.h"
 #include "led_task.h"
 #include "zigbee_init.h"
+#include "zigbee_task.h"
 #include "wifi_init.h"
 
 static const char *TAG = "main";
@@ -32,9 +32,10 @@ void app_main(void)
 
     zanni_nvs_flash_init();
 
-    zanni_wifi_init(&system_status);
-    // zanni_zigbee_init();
+    // zanni_wifi_init(&system_status);
+    zanni_zigbee_init();
     
     // Create Blink Task
     xTaskCreate(&led_task, "led_task", 2048, &system_status, 5, NULL);
+    xTaskCreate(&zigbee_task, "zigbee_task", 4096, &system_status, 5, NULL);
 }
