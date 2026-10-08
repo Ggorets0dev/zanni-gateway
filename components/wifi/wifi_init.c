@@ -55,16 +55,11 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
         // Сигнализируем системе, что Wi-Fi готов к отправке TCP пакетов
-    
-        system_status_t* status = arg;
-        status->is_wifi_ok = true; 
     }
 }
 
-void zanni_wifi_init(system_status_t* status)
+void zanni_wifi_init(void)
 {
-    // status->is_wifi_ok = true;
-
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_sta();
@@ -77,12 +72,12 @@ void zanni_wifi_init(system_status_t* status)
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
                                                         ESP_EVENT_ANY_ID,
                                                         &event_handler,
-                                                        status,
+                                                        NULL,
                                                         &instance_any_id));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
                                                         IP_EVENT_STA_GOT_IP,
                                                         &event_handler,
-                                                        status,
+                                                        NULL,
                                                         &instance_got_ip));
 
     wifi_config_t wifi_config = 

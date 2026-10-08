@@ -6,7 +6,7 @@
 #include "esp_random.h"
 
 #include "common.h"
-#include "led_task.h"
+#include "status_task.h"
 #include "zigbee_init.h"
 #include "zigbee_task.h"
 #include "wifi_init.h"
@@ -28,14 +28,12 @@ void app_main(void)
 {
     ESP_LOGI(TAG, "Starting FreeRTOS test tasks...");
 
-    static system_status_t system_status = {0};
-
     zanni_nvs_flash_init();
 
     // zanni_wifi_init(&system_status);
-    zanni_zigbee_init();
+    // zanni_zigbee_init();
     
     // Create Blink Task
-    xTaskCreate(&led_task, "led_task", 2048, &system_status, 5, NULL);
-    xTaskCreate(&zigbee_task, "zigbee_task", 4096, &system_status, 5, NULL);
+    xTaskCreate(&status_task, "status_task", 2048, NULL, 5, NULL);
+    // xTaskCreate(&zigbee_task, "zigbee_task", 4096, &system_status, 5, NULL);
 }

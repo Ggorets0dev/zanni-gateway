@@ -1,3 +1,3 @@
-idf_component_register(SRCS "led_task.c"
+idf_component_register(SRCS "status_task.c"
                         INCLUDE_DIRS "include"
                         REQUIRES led_strip common)
