@@ -26,6 +26,7 @@ static const char *TAG = "WIFI";
 static void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data) 
 {
+    (void)arg;
     static int s_retry_num = 0;
     static status_msg_t status_msg;
 
@@ -115,6 +116,4 @@ void zanni_wifi_init(void)
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
-
-    ESP_LOGI(TAG, "wifi_init_sta завершена.");
 }

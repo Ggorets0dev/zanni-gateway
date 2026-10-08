@@ -1,9 +1,12 @@
 #include "zigbee_init.h"
 #include "common.h"
 #include <esp_zigbee.h>
+#include "esp_coexist.h"
 
 void zanni_zigbee_init(void)
 {
+    esp_coex_wifi_i154_enable();
+
     esp_zigbee_config_t config = 
     {
         .device_config = 
