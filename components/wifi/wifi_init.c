@@ -9,6 +9,7 @@
 #include "lwip/sys.h"
 #include "common.h"
 #include "status_queue.h"
+#include "system_events.h"
 
 #define CONNECT_RETRY_MAX   5
 
@@ -36,6 +37,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
     } 
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) 
     {
+        system_events_clear_bits(SYS_EVENT_WIFI_CONNECTED_BIT);
         wifi_event_sta_disconnected_t* event = (wifi_event_sta_disconnected_t*) event_data;
         ESP_LOGW(TAG, "Disconnected from WIFI! Reason code: %d", event->reason);
 
@@ -44,13 +46,11 @@ static void event_handler(void* arg, esp_event_base_t event_base,
             esp_wifi_connect();
             s_retry_num++;
             ESP_LOGI(TAG, "Reconnecting to WIFI spot (attempt %d)", s_retry_num);
-            // Берем в скобки, чтобы увидеть случайные пробелы или лишние кавычки из CMake
             ESP_LOGI(TAG, "WIFI SSID: [%s], PASS: [%s]", WIFI_SSID, WIFI_PASS);
-        } 
-        else 
+        }
+        else
         {
             ESP_LOGE(TAG, "Failed to connect to WIFI spot");
-
             status_msg.status = MODULE_STATUS_ERROR;
             status_queue_send(status_msg);
             // Здесь можно вызвать esp_restart() или запустить таймер Watchdog
@@ -61,6 +61,8 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
+
+        system_events_set_bits(SYS_EVENT_WIFI_CONNECTED_BIT);
 
         status_msg.status = MODULE_STATUS_OK;
         status_queue_send(status_msg);

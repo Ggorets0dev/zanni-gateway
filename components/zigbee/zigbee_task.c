@@ -1,4 +1,4 @@
-﻿#include "zigbee_task.h"
+#include "zigbee_task.h"
 #include "esp_zigbee.h"
 #include "ezbee/zha.h"
 #include "ezbee/zcl.h"
@@ -11,7 +11,9 @@
 #include "esp_random.h"
 #include "esp_ieee802154.h"
 
+#include "status_queue.h"
 #include "zigbee_init.h"
+#include "system_events.h"
 
 #define TAG "ZIGBEE"
 
@@ -21,6 +23,7 @@ static char s_manuf_name[] = "\x06""SONOFF";
 static char s_model_id[]   = "\x09""BASICZBR3";
 
 #define SONOFF_ENDPOINT 1
+
 
 static void apply_sonoff_spoofing(void)
 {
@@ -48,7 +51,10 @@ static void apply_sonoff_spoofing(void)
 
 static bool app_signal_handler(const ezb_app_signal_t *signal) 
 {
+    static status_msg_t status_msg;
     ezb_app_signal_type_t sig_type = ezb_app_signal_get_type(signal);
+
+    status_msg.module = MODULE_ZIGBEE;
 
     switch (sig_type) {
         case EZB_ZDO_SIGNAL_SKIP_STARTUP:
@@ -82,6 +88,8 @@ static bool app_signal_handler(const ezb_app_signal_t *signal)
             if (params && params->status == EZB_BDB_STATUS_SUCCESS) {
                 apply_sonoff_spoofing();
                 ESP_LOGI(TAG, "✓ Подключено к сети! Ожидаем interview от хаба...");
+                status_msg.status = MODULE_STATUS_OK;
+                status_queue_send(status_msg);
             } else {
                 ESP_LOGW(TAG, "✗ Сеть не найдена (status=%d). Повтор через 5с...", params ? params->status : -1);
                 vTaskDelay(pdMS_TO_TICKS(5000));
@@ -93,6 +101,16 @@ static bool app_signal_handler(const ezb_app_signal_t *signal)
         case EZB_ZDO_SIGNAL_LEAVE:
             ESP_LOGW(TAG, "[SIGNAL] LEAVE — удалён из сети координатором");
             break;
+
+        case EZB_NWK_SIGNAL_PERMIT_JOIN_STATUS: {
+            const ezb_nwk_signal_permit_join_status_params_t *params = ezb_app_signal_get_params(signal);
+            if (params && params->duration) {
+                ESP_LOGI(TAG, "[SIGNAL] PERMIT_JOIN: Сеть открыта на %d секунд. (PAN ID: 0x%04hx)", params->duration, ezb_nwk_get_panid());
+            } else {
+                ESP_LOGW(TAG, "[SIGNAL] PERMIT_JOIN: Сеть закрыта для новых устройств. (PAN ID: 0x%04hx)", ezb_nwk_get_panid());
+            }
+            break;
+        }
 
         default:
             // Логируем ВСЕ неизвестные сигналы — помогает понять что делает хаб после join
@@ -171,6 +189,7 @@ void zb_action_handler(ezb_zcl_core_action_callback_id_t callback_id, void *mess
             break;
         }
         default:
+            ESP_LOGW(TAG, "Unhandled ZCL action callback_id: %d", callback_id);
             break;
     }
 }
@@ -178,6 +197,10 @@ void zb_action_handler(ezb_zcl_core_action_callback_id_t callback_id, void *mess
 
 void zigbee_task(void *pvParameters) 
 {
+    ESP_LOGI(TAG, "Waiting for Wi-Fi connection before starting Zigbee...");
+    system_events_wait_bits(SYS_EVENT_WIFI_CONNECTED_BIT, portMAX_DELAY);
+    ESP_LOGI(TAG, "Wi-Fi connected. Starting Zigbee...");
+
     zanni_zigbee_init();
 
     // Разрешить поиск сети на всех стандартных каналах (11-26)

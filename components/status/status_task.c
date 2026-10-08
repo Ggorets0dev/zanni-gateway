@@ -52,8 +52,6 @@ void status_task(void *pvParameter)
         module_status[i] = MODULE_STATUS_CONF;
     }
 
-    module_status[MODULE_ZIGBEE] = MODULE_STATUS_OK;
-
     led_strip_handle_t led_strip;
     
     // LED strip general initialization
