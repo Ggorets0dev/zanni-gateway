@@ -2,14 +2,15 @@
 #include <string.h>
 #include <stdbool.h>
 
-#include "common.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "lwip/err.h"
 #include "lwip/sys.h"
+#include "common.h"
+#include "status_queue.h"
 
-#define CONNECT_RETRY_MAX   50
+#define CONNECT_RETRY_MAX   5
 
 #ifndef WIFI_SSID
 #error "WIFI SSID is not specified during build"
@@ -25,6 +26,9 @@ static void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data) 
 {
     static int s_retry_num = 0;
+    static status_msg_t status_msg;
+
+    status_msg.module = MODULE_WIFI;
 
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) 
     {
@@ -46,6 +50,9 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         else 
         {
             ESP_LOGE(TAG, "Failed to connect to WIFI spot");
+
+            status_msg.status = MODULE_STATUS_ERROR;
+            status_queue_send(status_msg);
             // Здесь можно вызвать esp_restart() или запустить таймер Watchdog
         }
     } 
@@ -54,6 +61,10 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
+
+        status_msg.status = MODULE_STATUS_OK;
+        status_queue_send(status_msg);
+
         // Сигнализируем системе, что Wi-Fi готов к отправке TCP пакетов
     }
 }

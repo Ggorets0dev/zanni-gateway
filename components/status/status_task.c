@@ -27,15 +27,32 @@ const uint8_t led_clr_lvls[MODULE_STATUS_MAX][3] =
 };
 // ==========
 
+static int find_max_status(const module_status_e* arr, size_t size)
+{
+    int max = arr[0];
+
+    for (size_t i = 1; i < size; i++) 
+    {
+        if (arr[i] > max) 
+        {
+            max = arr[i];
+        }
+    }
+
+    return max;
+}
+
 void status_task(void *pvParameter)
 {
     module_status_e module_status[MODULE_MAX] = {0};
-    module_status_e max_status = MODULE_STATUS_CONF;
+    module_status_e curr_status = MODULE_STATUS_CONF;
 
     for (size_t i = 0; i < MODULE_MAX; ++i)
     {
         module_status[i] = MODULE_STATUS_CONF;
     }
+
+    module_status[MODULE_ZIGBEE] = MODULE_STATUS_OK;
 
     led_strip_handle_t led_strip;
     
@@ -61,8 +78,7 @@ void status_task(void *pvParameter)
 
     ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip));
     
-    
-    uint8_t led_state = 0;
+    bool led_state = 0;
     
     led_strip_clear(led_strip);
 
@@ -70,18 +86,16 @@ void status_task(void *pvParameter)
     {
         if (led_state) 
         {
-            module_status_e incoming_status = 0;
+            static status_msg_t incoming_status;
             const bool is_any = status_queue_receive(&incoming_status, 0);
 
             if (is_any) 
             {
-                if (incoming_status > max_status)
-                {
-                    max_status = incoming_status;
-                }
+                module_status[incoming_status.module] = incoming_status.status;
+                curr_status = find_max_status(module_status, MODULE_MAX);
             }
             
-            led_strip_set_pixel(led_strip, 0, led_clr_lvls[max_status][0], led_clr_lvls[max_status][1], led_clr_lvls[max_status][2]);
+            led_strip_set_pixel(led_strip, 0, led_clr_lvls[curr_status][0], led_clr_lvls[curr_status][1], led_clr_lvls[curr_status][2]);
             led_strip_refresh(led_strip);
         } 
         else 

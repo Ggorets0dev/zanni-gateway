@@ -17,7 +17,7 @@ bool status_queue_init(void)
     return status_queue != NULL;
 }
 
-bool status_queue_send(module_status_e status)
+bool status_queue_send(status_msg_t status)
 {
     if (status_queue == NULL)
     {
@@ -31,7 +31,7 @@ bool status_queue_send(module_status_e status)
     ) == pdPASS;
 }
 
-bool status_queue_receive(module_status_e* status, uint32_t delay)
+bool status_queue_receive(status_msg_t* status, uint32_t delay)
 {
     if (status_queue == NULL || status == NULL)
     {

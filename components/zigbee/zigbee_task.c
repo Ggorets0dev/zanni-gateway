@@ -11,6 +11,8 @@
 #include "esp_random.h"
 #include "esp_ieee802154.h"
 
+#include "zigbee_init.h"
+
 #define TAG "ZIGBEE"
 
 // Spoofing: мимикрируем под SONOFF BASICZBR3
@@ -176,6 +178,8 @@ void zb_action_handler(ezb_zcl_core_action_callback_id_t callback_id, void *mess
 
 void zigbee_task(void *pvParameters) 
 {
+    zanni_zigbee_init();
+
     // Разрешить поиск сети на всех стандартных каналах (11-26)
     ezb_bdb_set_primary_channel_set(0x07FFF800U); 
 
