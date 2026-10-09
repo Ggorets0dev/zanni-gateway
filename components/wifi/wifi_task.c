@@ -6,6 +6,8 @@
 #include "lwip/sockets.h"
 #include "esp_log.h"
 
+#include "zanni_protocol.h"
+#include "netmap.h"
 #include "module.h"
 #include "system_events.h"
 #include "wifi_task.h"
@@ -49,17 +51,25 @@ static int connect_to_node(char* host, int port)
     return sock;
 }
 
-static bool send_tcp_message(int sock, int endpoint, bool state, int level)
+static bool send_tcp_message(int sock)
 {
-    char payload[256];
+    static int counter;
+    uint8_t payload[ZANNI_MSG_SIZE] = {0};
+    zanni_message_t msg = {0};
+    
     // Build JSON payload
-    snprintf(payload, sizeof(payload),
-             "{\"source\": \"esp32_c6_bridge\", \"endpoint\": %d, \"action\": \"set_state\", "
-             "\"payload\": {\"state\": %d, \"level\": %d}}\n",
-             endpoint, state ? 1 : 0, level);
+    snprintf(msg.tag, sizeof(msg.tag),
+             "DEV1");
+
+    msg.status = counter;
+    msg.device_type = ZANNI_VIRT_DEV_TOGGLE;
+
+    ++counter;
+
+    zanni_message_encode(&msg, payload, sizeof(payload));
 
     ESP_LOGI(TAG, "Socket connected, sending data...");
-    int err = send(sock, payload, strlen(payload), 0);
+    int err = send(sock, payload, ZANNI_MSG_SIZE, 0);
     if (err < 0)
     {
         ESP_LOGE(TAG, "Failed to send data: errno %d", errno);
@@ -67,21 +77,8 @@ static bool send_tcp_message(int sock, int endpoint, bool state, int level)
     }
     
     ESP_LOGI(TAG, "Message sent: %s", payload);
-
-    // Optionally: wait for response from server ({"status": "ok", ...})
-    char rx_buffer[128];
-    int len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
-    if (len > 0)
-    {
-        rx_buffer[len] = 0; // Null-terminate
-        ESP_LOGI(TAG, "Server response: %s", rx_buffer);
-        return true;
-    }
-    else
-    {
-        ESP_LOGW(TAG, "Failed to receive response or timeout: len %d, errno %d", len, errno);
-        return false;
-    }
+    
+    return true;
 }
 
 void wifi_task(void *pvParameter)
@@ -89,8 +86,7 @@ void wifi_task(void *pvParameter)
     zanni_wifi_init();
 
     int sock = -1;
-    int level = 0;
-    
+
     for (;;)
     {
 
@@ -102,7 +98,7 @@ void wifi_task(void *pvParameter)
             }
             if (sock != -1)
             {
-                if (!send_tcp_message(sock, 0, 0, level))
+                if (!send_tcp_message(sock))
                 {
                     ESP_LOGW(TAG, "Closing socket due to error");
                     close(sock);
@@ -111,7 +107,6 @@ void wifi_task(void *pvParameter)
             }
         }
         
-        ++level;
         vTaskDelay(pdMS_TO_TICKS(WIFI_TASK_PERIOD_MS));
     }
 }

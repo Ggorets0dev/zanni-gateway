@@ -1,0 +1,26 @@
+#include "zanni_protocol.h"
+
+typedef struct
+{
+    char ip[16];
+    int port;
+    int id;
+} zanni_node_t;
+
+typedef struct
+{
+    char tag[32];
+    zanni_virt_dev_e type;
+} zanni_virt_dev_t;
+
+const zanni_node_t zanni_nodes[@NODES_COUNT] =
+{
+    // { "192.168.1.10", 8080, 1 },
+    @NODES
+};
+
+const zanni_virt_dev_t zanni_virt_devs[@DEVS_COUNT] =
+{
+    // { "DEV1", ZANNI_VIRT_DEV_TOGGLE }
+    @DEVS
+};
