@@ -12,7 +12,9 @@
 #include "esp_ieee802154.h"
 
 #include "status_queue.h"
+#include "net_queue.h"
 #include "zigbee_init.h"
+#include "netmap.h"
 #include "system_events.h"
 
 #define TAG "ZIGBEE"
@@ -120,39 +122,9 @@ static bool app_signal_handler(const ezb_app_signal_t *signal)
     return false;
 }
 
-void update_local_state_and_report(uint8_t endpoint, bool new_state) {
-    ezb_zcl_set_attr_value(
-        endpoint, 
-        EZB_ZCL_CLUSTER_ID_ON_OFF, 
-        EZB_ZCL_CLUSTER_SERVER, 
-        EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID, 
-        EZB_ZCL_STD_MANUF_CODE,
-        &new_state, 
-        false
-    );
-
-    ezb_zcl_report_attr_cmd_t report_cmd = {
-        .cmd_ctrl = {
-            .dst_addr = EZB_ADDRESS_NONE(),
-            .dst_ep = 0,
-            .src_ep = endpoint,
-            .cluster_id = EZB_ZCL_CLUSTER_ID_ON_OFF,
-            .manuf_code = EZB_ZCL_STD_MANUF_CODE,
-            .fc = {
-                .manuf_specific = 0,
-                .direction = EZB_ZCL_CMD_DIRECTION_TO_CLI,
-                .dis_default_rsp = 0
-            }
-        },
-        .payload = {
-            .attr_id = EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID
-        }
-    };
-
-    ezb_zcl_report_attr_cmd_req(&report_cmd);
-}
-
 void zb_action_handler(ezb_zcl_core_action_callback_id_t callback_id, void *message) {
+    static gate_message_t gate_msg;
+    
     switch (callback_id) {
         case EZB_ZCL_CORE_SET_ATTR_VALUE_CB_ID: {
             ezb_zcl_set_attr_value_message_t *msg = (ezb_zcl_set_attr_value_message_t *)message;
@@ -165,6 +137,14 @@ void zb_action_handler(ezb_zcl_core_action_callback_id_t callback_id, void *mess
                 ESP_LOGI("ZIGBEE", "Получена команда для Endpoint %d: %s", 
                          msg->info.dst_ep, 
                          state ? "ВКЛЮЧИТЬ" : "ВЫКЛЮЧИТЬ");
+                
+                // FIXME: Hardcoded values
+                gate_msg.node_id = zanni_virt_devs[0].node_id;
+                gate_msg.payload.device_type = zanni_virt_devs[0].type;
+                gate_msg.payload.status = state;
+                snprintf(gate_msg.payload.tag, sizeof(gate_msg.payload.tag), "%s", zanni_virt_devs[0].tag);
+
+                net_queue_send(&gate_msg);
 
                 // Принудительно отправляем Report обратно хабу (Координатору)
                 ezb_zcl_report_attr_cmd_t report_cmd = {

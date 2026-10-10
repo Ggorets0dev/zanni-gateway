@@ -5,9 +5,9 @@
 #include "nvs_flash.h"
 #include "esp_random.h"
 
-#include "common.h"
 #include "status_task.h"
 #include "status_queue.h"
+#include "net_queue.h"
 #include "system_events.h"
 #include "zigbee_init.h"
 #include "zigbee_task.h"
@@ -29,14 +29,22 @@ static void zanni_nvs_flash_init(void)
 
 void app_main(void)
 {
+    bool is_inited = true;
+
     ESP_LOGI(TAG, "Starting FreeRTOS test tasks...");
 
     zanni_nvs_flash_init();
 
-    status_queue_init();
-    system_events_init();
+    is_inited &= status_queue_init();
+    is_inited &= net_queue_init();
+    is_inited &= system_events_init();
     
-    // Create Blink Task
+    if (!is_inited)
+    {
+        ESP_LOGE(TAG, "Failed to init some FreeRTOS objects");
+        esp_restart();
+    }
+
     xTaskCreate(&status_task, "status_task", 2048, NULL, 4, NULL);
     xTaskCreate(&zigbee_task, "zigbee_task", 4096, NULL, 5, NULL);
     xTaskCreate(&wifi_task, "wifi_task", 4096, NULL, 6, NULL);

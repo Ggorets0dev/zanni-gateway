@@ -1,4 +1,9 @@
+#pragma once
+
 #include "zanni_protocol.h"
+
+#define NODES_COUNT @NODES_COUNT
+#define DEVS_COUNT  @DEVS_COUNT
 
 typedef struct
 {
@@ -10,17 +15,18 @@ typedef struct
 typedef struct
 {
     char tag[32];
+    int node_id;
     zanni_virt_dev_e type;
 } zanni_virt_dev_t;
 
-const zanni_node_t zanni_nodes[@NODES_COUNT] =
+static const zanni_node_t zanni_nodes[@NODES_COUNT] =
 {
-    // { "192.168.1.10", 8080, 1 },
+    // { "192.168.1.10", 8080, 0 },
     @NODES
 };
 
-const zanni_virt_dev_t zanni_virt_devs[@DEVS_COUNT] =
+static const zanni_virt_dev_t zanni_virt_devs[@DEVS_COUNT] =
 {
-    // { "DEV1", ZANNI_VIRT_DEV_TOGGLE }
+    // { "DEV1", 0, ZANNI_VIRT_DEV_TOGGLE }
     @DEVS
 };

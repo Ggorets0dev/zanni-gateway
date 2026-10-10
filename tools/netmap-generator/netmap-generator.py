@@ -52,7 +52,7 @@ def main():
     devs_str = []
     for dev in virt_devs:
         dev_type = dev["type"].upper()
-        devs_str.append(f'{{ "{dev["tag"]}", ZANNI_VIRT_DEV_{dev_type} }}')
+        devs_str.append(f'{{ "{dev["tag"]}", {dev["node_id"]}, ZANNI_VIRT_DEV_{dev_type} }}')
     devs_out = ",\n    ".join(devs_str)
 
     # Replace placeholders

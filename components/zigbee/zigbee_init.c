@@ -1,5 +1,4 @@
 #include "zigbee_init.h"
-#include "common.h"
 #include <esp_zigbee.h>
 #include "esp_coexist.h"
 

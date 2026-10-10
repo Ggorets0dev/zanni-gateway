@@ -5,7 +5,7 @@
 
 #define SYS_EVENT_WIFI_CONNECTED_BIT BIT0
 
-void system_events_init(void);
+bool system_events_init(void);
 
 // Wait for specific system events. Returns pdTRUE if all bits were set before timeout.
 BaseType_t system_events_wait_bits(EventBits_t bits_to_wait_for, TickType_t xTicksToWait);

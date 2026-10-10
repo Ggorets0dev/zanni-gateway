@@ -7,11 +7,10 @@
 #include "esp_log.h"
 #include "lwip/err.h"
 #include "lwip/sys.h"
-#include "common.h"
 #include "status_queue.h"
 #include "system_events.h"
 
-#define CONNECT_RETRY_MAX   5
+#define CONNECT_RETRY_MAX   10
 
 #ifndef WIFI_SSID
 #error "WIFI SSID is not specified during build"
@@ -88,6 +87,7 @@ void zanni_wifi_init(void)
                                                         &event_handler,
                                                         NULL,
                                                         &instance_any_id));
+                                                        
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
                                                         IP_EVENT_STA_GOT_IP,
                                                         &event_handler,

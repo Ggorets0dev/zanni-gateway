@@ -12,14 +12,13 @@
 #include "system_events.h"
 #include "wifi_task.h"
 #include "wifi_init.h"
+#include "net_queue.h"
 
 #define TAG                     g_module_tag[MODULE_WIFI]
-#define WIFI_TASK_PERIOD_MS     5000
+#define WIFI_TASK_READ_DELAY    1000u
+#define WIFI_TASK_WAIT_DELAY    1000u
 
-#define HOST_IP_ADDR            "192.168.1.118"
-#define PORT                    9199
-
-static int connect_to_node(char* host, int port)
+static int connect_to_node(const char* host, int port)
 {
     struct sockaddr_in dest_addr;
     inet_pton(AF_INET, host, &dest_addr.sin_addr);
@@ -39,8 +38,9 @@ static int connect_to_node(char* host, int port)
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 
-    ESP_LOGI(TAG, "Connecting to %s:%d", HOST_IP_ADDR, PORT);
+    ESP_LOGI(TAG, "Connecting to %s:%d", host, port);
     int err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+    
     if (err != 0)
     {
         ESP_LOGE(TAG, "Socket connection failed: errno %d", errno);
@@ -51,22 +51,11 @@ static int connect_to_node(char* host, int port)
     return sock;
 }
 
-static bool send_tcp_message(int sock)
+static bool send_msg_to_node(const int sock, zanni_message_t* msg)
 {
-    static int counter;
     uint8_t payload[ZANNI_MSG_SIZE] = {0};
-    zanni_message_t msg = {0};
-    
-    // Build JSON payload
-    snprintf(msg.tag, sizeof(msg.tag),
-             "DEV1");
 
-    msg.status = counter;
-    msg.device_type = ZANNI_VIRT_DEV_TOGGLE;
-
-    ++counter;
-
-    zanni_message_encode(&msg, payload, sizeof(payload));
+    zanni_message_encode(msg, payload, sizeof(payload));
 
     ESP_LOGI(TAG, "Socket connected, sending data...");
     int err = send(sock, payload, ZANNI_MSG_SIZE, 0);
@@ -83,30 +72,41 @@ static bool send_tcp_message(int sock)
 
 void wifi_task(void *pvParameter)
 {
-    zanni_wifi_init();
+    bool rc = false;
+    int socks[NODES_COUNT] = {0};
+    gate_message_t msg = {0};
 
-    int sock = -1;
+    // Init socks with 'no connection' value
+    for (uint16_t i = 0; i < NODES_COUNT; ++i) socks[i] = -1;
+    
+    zanni_wifi_init();
 
     for (;;)
     {
-
-        if (system_events_wait_bits(SYS_EVENT_WIFI_CONNECTED_BIT, 0) == pdTRUE)
+        if (system_events_wait_bits(SYS_EVENT_WIFI_CONNECTED_BIT, WIFI_TASK_WAIT_DELAY) != pdTRUE)
         {
-            if (sock == -1)
-            {
-                sock = connect_to_node(HOST_IP_ADDR, PORT);
-            }
-            if (sock != -1)
-            {
-                if (!send_tcp_message(sock))
-                {
-                    ESP_LOGW(TAG, "Closing socket due to error");
-                    close(sock);
-                    sock = -1;
-                }
-            }
+            continue;
         }
         
-        vTaskDelay(pdMS_TO_TICKS(WIFI_TASK_PERIOD_MS));
+        // Connect to all nodes
+        for (uint16_t i = 0; i < NODES_COUNT; ++i)
+        {
+            if (socks[i] == -1)
+            {
+                // Connection is not ready
+                socks[i] = connect_to_node(zanni_nodes[i].ip, zanni_nodes[i].port);
+            }
+        }
+
+        const bool is_any = net_queue_receive(&msg, WIFI_TASK_READ_DELAY);
+
+        if (is_any && msg.node_id < DEVS_COUNT)
+        {
+            const int curr_sock = socks[msg.node_id];
+
+            if (curr_sock == -1) continue;
+
+            rc = send_msg_to_node(curr_sock, &msg.payload);
+        }
     }
 }
