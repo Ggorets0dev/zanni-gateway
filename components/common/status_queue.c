@@ -17,7 +17,7 @@ bool status_queue_init(void)
     return status_queue != NULL;
 }
 
-bool status_queue_send(status_msg_t status)
+bool status_queue_send(status_msg_t status, uint32_t delay_ms)
 {
     if (status_queue == NULL)
     {
@@ -27,7 +27,7 @@ bool status_queue_send(status_msg_t status)
     return xQueueSend(
         status_queue,
         &status,
-        portMAX_DELAY
+        pdMS_TO_TICKS(delay_ms)
     ) == pdPASS;
 }
 

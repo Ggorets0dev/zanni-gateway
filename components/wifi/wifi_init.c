@@ -8,6 +8,7 @@
 #include "lwip/err.h"
 #include "lwip/sys.h"
 #include "system_events.h"
+#include "module.h"
 
 #define CONNECT_RETRY_MAX   10
 
@@ -19,7 +20,7 @@
 #error "WIFI PASS is not specified during build"
 #endif
 
-static const char *TAG = "WIFI";
+#define TAG     g_module_tag[MODULE_WIFI]
 
 static void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data) 
@@ -47,7 +48,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         else
         {
             ESP_LOGE(TAG, "Failed to connect to WIFI spot");
-            // Здесь можно вызвать esp_restart() или запустить таймер Watchdog
+            system_events_set_bits(SYS_EVENT_GLOBAL_FAULT_BIT);
         }
     } 
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) 
@@ -57,8 +58,6 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         s_retry_num = 0;
 
         system_events_set_bits(SYS_EVENT_WIFI_CONNECTED_BIT);
-
-        // Сигнализируем системе, что Wi-Fi готов к отправке TCP пакетов
     }
 }
 
@@ -89,8 +88,8 @@ void zanni_wifi_init(void)
     {
         .sta = 
         {
-            // Для WPA2/WPA3 mixed режима ESP-IDF настоятельно требует поддержки PMF
-            .pmf_cfg = {
+            .pmf_cfg = 
+            {
                 .capable = true,
                 .required = false
             },
@@ -98,12 +97,9 @@ void zanni_wifi_init(void)
         },
     };
 
-    // Безопасно копируем макросы, чтобы избежать возможных проблем с приведением типов 
-    // и случайными символами из сборочной системы.
     strncpy((char *)wifi_config.sta.ssid, WIFI_SSID, sizeof(wifi_config.sta.ssid) - 1);
     strncpy((char *)wifi_config.sta.password, WIFI_PASS, sizeof(wifi_config.sta.password) - 1);
 
-    // 5. Запуск Wi-Fi
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());

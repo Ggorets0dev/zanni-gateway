@@ -85,10 +85,7 @@ static void update_local_state_and_report(uint8_t endpoint, bool new_state)
 
 static bool app_signal_handler(const ezb_app_signal_t *signal) 
 {
-    static status_msg_t status_msg;
     ezb_app_signal_type_t sig_type = ezb_app_signal_get_type(signal);
-
-    status_msg.module = MODULE_ZIGBEE;
 
     switch (sig_type) {
         case EZB_ZDO_SIGNAL_SKIP_STARTUP:
@@ -110,8 +107,8 @@ static bool app_signal_handler(const ezb_app_signal_t *signal)
                 if (!ezb_bdb_is_factory_new()) {
                     ESP_LOGI(TAG, "✓ Устройство уже в сети после перезагрузки. Синхронизируем состояние (ВЫКЛ)...");
                     update_local_state_and_report(SONOFF_ENDPOINT, false);
-                    status_msg.status = MODULE_STATUS_OK;
-                    status_queue_send(status_msg);
+
+                    system_events_set_bits(SYS_EVENT_ZIGBEE_CONNECTED_BIT);
                 } else {
                     ESP_LOGI(TAG, "→ Запуск NETWORK_STEERING");
                     ezb_bdb_start_top_level_commissioning(EZB_BDB_MODE_NETWORK_STEERING);
@@ -130,8 +127,8 @@ static bool app_signal_handler(const ezb_app_signal_t *signal)
                 apply_sonoff_spoofing();
                 ESP_LOGI(TAG, "✓ Подключено к сети! Синхронизируем состояние с хабом (ВЫКЛ)...");
                 update_local_state_and_report(SONOFF_ENDPOINT, false);
-                status_msg.status = MODULE_STATUS_OK;
-                status_queue_send(status_msg);
+
+                system_events_set_bits(SYS_EVENT_ZIGBEE_CONNECTED_BIT);
             } else {
                 ESP_LOGW(TAG, "✗ Сеть не найдена (status=%d). Повтор через 5с...", params ? params->status : -1);
                 vTaskDelay(pdMS_TO_TICKS(5000));
@@ -142,6 +139,7 @@ static bool app_signal_handler(const ezb_app_signal_t *signal)
 
         case EZB_ZDO_SIGNAL_LEAVE:
             ESP_LOGW(TAG, "[SIGNAL] LEAVE — удалён из сети координатором");
+            system_events_clear_bits(SYS_EVENT_ZIGBEE_CONNECTED_BIT);
             break;
 
         case EZB_NWK_SIGNAL_PERMIT_JOIN_STATUS: {
@@ -165,6 +163,12 @@ static bool app_signal_handler(const ezb_app_signal_t *signal)
 void zb_action_handler(ezb_zcl_core_action_callback_id_t callback_id, void *message) {
     static gate_msg_t gate_msg;
     
+    static status_msg_t status_msg = 
+    {
+        .module = MODULE_ZIGBEE,
+        .status = MODULE_STATUS_TX
+    };
+
     switch (callback_id) {
         case EZB_ZCL_CORE_SET_ATTR_VALUE_CB_ID: {
             ezb_zcl_set_attr_value_message_t *msg = (ezb_zcl_set_attr_value_message_t *)message;
@@ -187,6 +191,7 @@ void zb_action_handler(ezb_zcl_core_action_callback_id_t callback_id, void *mess
                 gate_msg.payload.status = state;
                 snprintf(gate_msg.payload.tag, sizeof(gate_msg.payload.tag), "%s", zanni_virt_devs[0].tag);
 
+                status_queue_send(status_msg, 0);
                 net_queue_send(&gate_msg);
 
                 // Принудительно отправляем Report обратно хабу (Координатору)

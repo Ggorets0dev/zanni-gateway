@@ -15,9 +15,9 @@
 #include "net_queue.h"
 #include "status_queue.h"
 
-#define TAG                     g_module_tag[MODULE_WIFI]
-#define WIFI_TASK_READ_DELAY    1000u
-#define WIFI_TASK_WAIT_DELAY    1000u
+#define TAG                         g_module_tag[MODULE_WIFI]
+#define WIFI_TASK_READ_DELAY        1000u
+#define WIFI_TASK_WAIT_DELAY        1000u
 
 #define KEEP_ALIVE_IDLE_SEC         30
 #define KEEP_ALIVE_INTERVAL_SEC     10
@@ -53,7 +53,7 @@ static int connect_to_node(const char* host, int port)
     configure_keepalive(sock);
 
     struct timeval timeout;
-    timeout.tv_sec = 2; // 2 seconds timeout
+    timeout.tv_sec = 1;     // timeout
     timeout.tv_usec = 0;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
@@ -105,7 +105,8 @@ void wifi_task(void *pvParameter)
 {
     status_msg_t status_msg = 
     {
-        .module = MODULE_WIFI
+        .module = MODULE_WIFI,
+        .status = MODULE_STATUS_RX
     };
 
     bool is_started = false;
@@ -150,8 +151,8 @@ void wifi_task(void *pvParameter)
         // SUMBIT CONNECT STATUS
         if (prev_conn_state != is_all_connected)
         {
-            status_msg.status = is_all_connected ? MODULE_STATUS_OK : MODULE_STATUS_CONF;
-            status_queue_send(status_msg);
+            if (is_all_connected)   system_events_set_bits(SYS_EVENT_NODES_CONNECTED_BIT);
+            else                    system_events_clear_bits(SYS_EVENT_NODES_CONNECTED_BIT);
         }
         prev_conn_state = is_all_connected;
 
@@ -165,6 +166,7 @@ void wifi_task(void *pvParameter)
             if (curr_sock == -1) continue;
 
             rc = send_msg_to_node(curr_sock, &msg.payload);
+            rc = status_queue_send(status_msg, 0);
         }
     }
 }

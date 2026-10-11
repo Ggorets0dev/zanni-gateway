@@ -1,4 +1,3 @@
-#include "status_task.h"
 #include "led_strip.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -9,49 +8,43 @@
 #include <stdbool.h>
 
 #include "module.h"
+#include "status_task.h"
 #include "status_queue.h"
+#include "system_events.h"
 
-#define STATUS_TASK_TAG         "STATUS"
-#define STATUS_TASK_PERIOD_MS   1000
+#define TAG                             g_module_tag[MODULE_STATUS]
 
-#define LED_GPIO                8
+#define STATUS_TASK_GLOBAL_PERIOD_MS    800
+#define STATUS_TASK_EVENT_PERIOD_MS     100
 
-#define CLR_LVL_LIMIT           25
+#define LED_GPIO                        8
+
+#define CLR_LVL_LIMIT                   15
 
 // ========== LED SETTINGS
 const uint8_t led_clr_lvls[MODULE_STATUS_MAX][3] =
 {
     [MODULE_STATUS_OK]      = { 0, CLR_LVL_LIMIT, 0},
     [MODULE_STATUS_CONF]    = { CLR_LVL_LIMIT, CLR_LVL_LIMIT, 0},
+    [MODULE_STATUS_TX]      = { CLR_LVL_LIMIT, 0, CLR_LVL_LIMIT},
+    [MODULE_STATUS_RX]      = { 0, 0, CLR_LVL_LIMIT},
     [MODULE_STATUS_ERROR]   = { CLR_LVL_LIMIT, 0, 0},
 };
 // ==========
 
-static int find_max_status(const module_status_e* arr, size_t size)
+static bool is_status_event(module_status_e status)
 {
-    int max = arr[0];
-
-    for (size_t i = 1; i < size; i++) 
+    if (status == MODULE_STATUS_RX || status == MODULE_STATUS_TX)
     {
-        if (arr[i] > max) 
-        {
-            max = arr[i];
-        }
+        return true;
     }
-
-    return max;
+    
+    return false;
 }
 
 void status_task(void *pvParameter)
 {
-    module_status_e module_status[MODULE_MAX] = {0};
     module_status_e curr_status = MODULE_STATUS_CONF;
-
-    for (size_t i = 0; i < MODULE_MAX; ++i)
-    {
-        module_status[i] = MODULE_STATUS_CONF;
-    }
-
     led_strip_handle_t led_strip;
     
     // LED strip general initialization
@@ -89,8 +82,23 @@ void status_task(void *pvParameter)
 
             if (is_any) 
             {
-                module_status[incoming_status.module] = incoming_status.status;
-                curr_status = find_max_status(module_status, MODULE_MAX);
+                // Get status from queue
+                curr_status = incoming_status.status;
+            }
+            else
+            {
+                // Get status from flags
+
+                // Try to find fault
+                const bool is_fault = system_events_wait_bits(SYS_EVENT_GLOBAL_FAULT_BIT, 0);
+                curr_status = is_fault ? MODULE_STATUS_ERROR : MODULE_STATUS_CONF;
+                
+                // Try to find online
+                if (!is_fault)
+                {
+                    const bool is_online = system_events_wait_bits(SYS_EVENT_SYSTEM_ONLINE, 0);
+                    curr_status = is_online ? MODULE_STATUS_OK : MODULE_STATUS_CONF;
+                }
             }
             
             led_strip_set_pixel(led_strip, 0, led_clr_lvls[curr_status][0], led_clr_lvls[curr_status][1], led_clr_lvls[curr_status][2]);
@@ -103,6 +111,7 @@ void status_task(void *pvParameter)
         
         led_state = !led_state;
         
-        vTaskDelay(pdMS_TO_TICKS(STATUS_TASK_PERIOD_MS));
+        const uint32_t delay_ms = is_status_event(curr_status) ? STATUS_TASK_EVENT_PERIOD_MS : STATUS_TASK_GLOBAL_PERIOD_MS;
+        vTaskDelay(pdMS_TO_TICKS(delay_ms));
     }
 }
