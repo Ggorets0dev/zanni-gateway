@@ -14,4 +14,4 @@ bool status_queue_init(void);
 
 bool status_queue_send(status_msg_t status);
 
-bool status_queue_receive(status_msg_t* status, uint32_t delay);
+bool status_queue_receive(status_msg_t* status, uint32_t delay_ms);

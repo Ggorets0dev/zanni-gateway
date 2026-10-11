@@ -31,7 +31,7 @@ bool status_queue_send(status_msg_t status)
     ) == pdPASS;
 }
 
-bool status_queue_receive(status_msg_t* status, uint32_t delay)
+bool status_queue_receive(status_msg_t* status, uint32_t delay_ms)
 {
     if (status_queue == NULL || status == NULL)
     {
@@ -41,6 +41,6 @@ bool status_queue_receive(status_msg_t* status, uint32_t delay)
     return xQueueReceive(
         status_queue,
         status,
-        delay
+        pdMS_TO_TICKS(delay_ms)
     ) == pdPASS;
 }

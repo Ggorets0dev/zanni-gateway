@@ -13,10 +13,28 @@
 #include "wifi_task.h"
 #include "wifi_init.h"
 #include "net_queue.h"
+#include "status_queue.h"
 
 #define TAG                     g_module_tag[MODULE_WIFI]
 #define WIFI_TASK_READ_DELAY    1000u
 #define WIFI_TASK_WAIT_DELAY    1000u
+
+#define KEEP_ALIVE_IDLE_SEC         30
+#define KEEP_ALIVE_INTERVAL_SEC     10
+#define KEEP_ALIVE_ATTEMPTS_CNT     3
+
+static void configure_keepalive(int sock)
+{
+    int keep_alive_enable = 1; 
+    int keep_idle         = KEEP_ALIVE_IDLE_SEC;        // sec
+    int keep_interval     = KEEP_ALIVE_INTERVAL_SEC;    // sec
+    int keep_count        = KEEP_ALIVE_ATTEMPTS_CNT;    // times
+
+    setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &keep_alive_enable, sizeof(keep_alive_enable));
+    setsockopt(sock, IPPROTO_TCP, TCP_KEEPIDLE, &keep_idle, sizeof(keep_idle));
+    setsockopt(sock, IPPROTO_TCP, TCP_KEEPINTVL, &keep_interval, sizeof(keep_interval));
+    setsockopt(sock, IPPROTO_TCP, TCP_KEEPCNT, &keep_count, sizeof(keep_count));
+}
 
 static int connect_to_node(const char* host, int port)
 {
@@ -31,6 +49,8 @@ static int connect_to_node(const char* host, int port)
         ESP_LOGE(TAG, "Failed to create socket: errno %d", errno);
         return -1;
     }
+
+    configure_keepalive(sock);
 
     struct timeval timeout;
     timeout.tv_sec = 2; // 2 seconds timeout
@@ -70,11 +90,29 @@ static bool send_msg_to_node(const int sock, zanni_message_t* msg)
     return true;
 }
 
+static void close_connections(int socks[NODES_COUNT])
+{
+    for (uint16_t i = 0; i < NODES_COUNT; ++i) 
+    {
+        if (socks[i] == -1) continue;
+
+        close(socks[i]);
+        socks[i] = -1;
+    }
+}
+
 void wifi_task(void *pvParameter)
 {
+    status_msg_t status_msg = 
+    {
+        .module = MODULE_WIFI
+    };
+
+    bool is_started = false;
     bool rc = false;
+    bool prev_conn_state = false;
     int socks[NODES_COUNT] = {0};
-    gate_message_t msg = {0};
+    gate_msg_t msg = {0};
 
     // Init socks with 'no connection' value
     for (uint16_t i = 0; i < NODES_COUNT; ++i) socks[i] = -1;
@@ -83,12 +121,21 @@ void wifi_task(void *pvParameter)
 
     for (;;)
     {
+        bool is_all_connected = true;
+
         if (system_events_wait_bits(SYS_EVENT_WIFI_CONNECTED_BIT, WIFI_TASK_WAIT_DELAY) != pdTRUE)
         {
+            if (is_started)
+            {
+                close_connections(socks);
+            }
+
             continue;
         }
         
-        // Connect to all nodes
+        is_started = true;
+
+        // COLLECT CONNECT STATUS
         for (uint16_t i = 0; i < NODES_COUNT; ++i)
         {
             if (socks[i] == -1)
@@ -96,8 +143,19 @@ void wifi_task(void *pvParameter)
                 // Connection is not ready
                 socks[i] = connect_to_node(zanni_nodes[i].ip, zanni_nodes[i].port);
             }
+
+            is_all_connected &= (socks[i] != -1);
         }
 
+        // SUMBIT CONNECT STATUS
+        if (prev_conn_state != is_all_connected)
+        {
+            status_msg.status = is_all_connected ? MODULE_STATUS_OK : MODULE_STATUS_CONF;
+            status_queue_send(status_msg);
+        }
+        prev_conn_state = is_all_connected;
+
+        // TRANSMIT MESSAGES
         const bool is_any = net_queue_receive(&msg, WIFI_TASK_READ_DELAY);
 
         if (is_any && msg.node_id < DEVS_COUNT)

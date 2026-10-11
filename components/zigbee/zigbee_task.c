@@ -51,6 +51,38 @@ static void apply_sonoff_spoofing(void)
         s_manuf_name + 1, s_model_id + 1, r1, r2);
 }
 
+static void update_local_state_and_report(uint8_t endpoint, bool new_state)
+{
+    ezb_zcl_set_attr_value(
+        endpoint,
+        EZB_ZCL_CLUSTER_ID_ON_OFF,
+        EZB_ZCL_CLUSTER_SERVER,
+        EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID,
+        EZB_ZCL_STD_MANUF_CODE,
+        &new_state,
+        false
+    );
+
+    ezb_zcl_report_attr_cmd_t report_cmd = {
+        .cmd_ctrl = {
+            .dst_addr = EZB_ADDRESS_SHORT(0x0000), // Явно указываем адрес хаба (координатора)
+            .dst_ep = 1,                           // Эндпоинт хаба
+            .src_ep = endpoint,
+            .cluster_id = EZB_ZCL_CLUSTER_ID_ON_OFF,
+            .manuf_code = EZB_ZCL_STD_MANUF_CODE,
+            .fc = {
+                .manuf_specific = 0,
+                .direction = EZB_ZCL_CMD_DIRECTION_TO_CLI,
+                .dis_default_rsp = 0
+            }
+        },
+        .payload = {
+            .attr_id = EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID
+        }
+    };
+    ezb_zcl_report_attr_cmd_req(&report_cmd);
+}
+
 static bool app_signal_handler(const ezb_app_signal_t *signal) 
 {
     static status_msg_t status_msg;
@@ -75,8 +107,15 @@ static bool app_signal_handler(const ezb_app_signal_t *signal)
 
             if (params && params->status == EZB_BDB_STATUS_SUCCESS) {
                 apply_sonoff_spoofing();
-                ESP_LOGI(TAG, "→ Запуск NETWORK_STEERING");
-                ezb_bdb_start_top_level_commissioning(EZB_BDB_MODE_NETWORK_STEERING);
+                if (!ezb_bdb_is_factory_new()) {
+                    ESP_LOGI(TAG, "✓ Устройство уже в сети после перезагрузки. Синхронизируем состояние (ВЫКЛ)...");
+                    update_local_state_and_report(SONOFF_ENDPOINT, false);
+                    status_msg.status = MODULE_STATUS_OK;
+                    status_queue_send(status_msg);
+                } else {
+                    ESP_LOGI(TAG, "→ Запуск NETWORK_STEERING");
+                    ezb_bdb_start_top_level_commissioning(EZB_BDB_MODE_NETWORK_STEERING);
+                }
             } else {
                 ESP_LOGW(TAG, "→ BDB init failed (status=%d), запуск NETWORK_STEERING", params ? params->status : -1);
                 ezb_bdb_start_top_level_commissioning(EZB_BDB_MODE_NETWORK_STEERING);
@@ -89,7 +128,8 @@ static bool app_signal_handler(const ezb_app_signal_t *signal)
             ESP_LOGI(TAG, "[SIGNAL] STEERING status=%d", params ? params->status : -1);
             if (params && params->status == EZB_BDB_STATUS_SUCCESS) {
                 apply_sonoff_spoofing();
-                ESP_LOGI(TAG, "✓ Подключено к сети! Ожидаем interview от хаба...");
+                ESP_LOGI(TAG, "✓ Подключено к сети! Синхронизируем состояние с хабом (ВЫКЛ)...");
+                update_local_state_and_report(SONOFF_ENDPOINT, false);
                 status_msg.status = MODULE_STATUS_OK;
                 status_queue_send(status_msg);
             } else {
@@ -123,12 +163,15 @@ static bool app_signal_handler(const ezb_app_signal_t *signal)
 }
 
 void zb_action_handler(ezb_zcl_core_action_callback_id_t callback_id, void *message) {
-    static gate_message_t gate_msg;
+    static gate_msg_t gate_msg;
     
     switch (callback_id) {
         case EZB_ZCL_CORE_SET_ATTR_VALUE_CB_ID: {
             ezb_zcl_set_attr_value_message_t *msg = (ezb_zcl_set_attr_value_message_t *)message;
             
+            // Подтверждаем стеку успешную обработку атрибута
+            msg->out.result = EZB_ZCL_STATUS_SUCCESS;
+
             if (msg->info.cluster_id == EZB_ZCL_CLUSTER_ID_ON_OFF && 
                 msg->in.attribute.id == EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID) {
                 

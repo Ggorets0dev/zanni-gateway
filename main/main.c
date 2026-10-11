@@ -46,6 +46,6 @@ void app_main(void)
     }
 
     xTaskCreate(&status_task, "status_task", 2048, NULL, 4, NULL);
-    xTaskCreate(&zigbee_task, "zigbee_task", 4096, NULL, 5, NULL);
-    xTaskCreate(&wifi_task, "wifi_task", 4096, NULL, 6, NULL);
+    xTaskCreate(&zigbee_task, "zigbee_task", 5120, NULL, 5, NULL);
+    xTaskCreate(&wifi_task, "wifi_task", 5120, NULL, 6, NULL);
 }

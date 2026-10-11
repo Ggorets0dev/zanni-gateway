@@ -7,7 +7,6 @@
 #include "esp_log.h"
 #include "lwip/err.h"
 #include "lwip/sys.h"
-#include "status_queue.h"
 #include "system_events.h"
 
 #define CONNECT_RETRY_MAX   10
@@ -27,9 +26,6 @@ static void event_handler(void* arg, esp_event_base_t event_base,
 {
     (void)arg;
     static int s_retry_num = 0;
-    static status_msg_t status_msg;
-
-    status_msg.module = MODULE_WIFI;
 
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) 
     {
@@ -51,8 +47,6 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         else
         {
             ESP_LOGE(TAG, "Failed to connect to WIFI spot");
-            status_msg.status = MODULE_STATUS_ERROR;
-            status_queue_send(status_msg);
             // Здесь можно вызвать esp_restart() или запустить таймер Watchdog
         }
     } 
@@ -63,9 +57,6 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         s_retry_num = 0;
 
         system_events_set_bits(SYS_EVENT_WIFI_CONNECTED_BIT);
-
-        status_msg.status = MODULE_STATUS_OK;
-        status_queue_send(status_msg);
 
         // Сигнализируем системе, что Wi-Fi готов к отправке TCP пакетов
     }
