@@ -9,7 +9,6 @@
 #include "status_queue.h"
 #include "net_queue.h"
 #include "system_events.h"
-#include "zigbee_init.h"
 #include "zigbee_task.h"
 #include "wifi_task.h"
 #include "wifi_init.h"

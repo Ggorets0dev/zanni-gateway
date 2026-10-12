@@ -5,6 +5,14 @@
 #define NODES_COUNT @NODES_COUNT
 #define DEVS_COUNT  @DEVS_COUNT
 
+#if NODES_COUNT <= 0 || NODES_COUNT > 8
+#error "NODES_COUNT must be in range [0;8]"
+#endif
+
+#if DEVS_COUNT <= 0 || DEVS_COUNT > 32
+#error "DEVS_COUNT must be in range [0;32]"
+#endif
+
 typedef struct
 {
     char ip[16];
