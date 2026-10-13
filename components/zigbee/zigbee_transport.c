@@ -9,6 +9,11 @@
 #include "ezbee/core.h"
 #include "ezbee/app_signals.h"
 
+#include "esp_log.h"
+#include "module.h"
+
+#define TAG g_module_tag[MODULE_ZIGBEE]
+
 static void update_attr_and_report(uint8_t endpoint,
                                     uint16_t cluster_id,
                                     uint16_t attr_id,
@@ -17,7 +22,7 @@ static void update_attr_and_report(uint8_t endpoint,
 {
     if (is_set_attr)
     {
-        ezb_zcl_set_attr_value(
+        esp_err_t r = ezb_zcl_set_attr_value(
             endpoint,
             cluster_id,
             EZB_ZCL_CLUSTER_SERVER,
@@ -26,6 +31,11 @@ static void update_attr_and_report(uint8_t endpoint,
             value_ptr,
             false
         );
+        if (r != ESP_OK)
+        {
+            ESP_LOGW(TAG, "ezb_zcl_set_attr_value ep=%d cl=0x%04X attr=0x%04X err=%d",
+                     endpoint, cluster_id, attr_id, r);
+        }
     }
 
     ezb_zcl_report_attr_cmd_t report_cmd = 
@@ -41,7 +51,7 @@ static void update_attr_and_report(uint8_t endpoint,
             {
                 .manuf_specific = 0,
                 .direction = EZB_ZCL_CMD_DIRECTION_TO_CLI,
-                .dis_default_rsp = 0
+                .dis_default_rsp = 1
             }
         },
         .payload = 
@@ -50,7 +60,12 @@ static void update_attr_and_report(uint8_t endpoint,
         }
     };
 
-    ezb_zcl_report_attr_cmd_req(&report_cmd);
+    ezb_err_t ret = ezb_zcl_report_attr_cmd_req(&report_cmd);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGW(TAG, "ezb_zcl_report_attr_cmd_req ep=%d cl=0x%04X attr=0x%04X err=%d",
+                 endpoint, cluster_id, attr_id, ret);
+    }
 }
 
 void zigbee_update_brightness(uint8_t endpoint, uint8_t level, bool is_set_attr) 

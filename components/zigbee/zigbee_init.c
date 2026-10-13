@@ -18,7 +18,7 @@ static void create_kojima_light_endpoint(ezb_zcl_cluster_desc_t* basic, ezb_af_e
 {
     ezb_zha_color_dimmable_light_config_t light_cfg = EZB_ZHA_COLOR_DIMMABLE_LIGHT_CONFIG();
     light_cfg.on_off_cfg.on_off = false;
-    light_cfg.level_cfg.current_level = 0;
+    light_cfg.level_cfg.current_level = 254;
 
     *desc = ezb_zha_create_color_dimmable_light(ep_id, &light_cfg);
     ezb_af_ep_desc_set_app_device_id(*desc, 0x010D); // Extended Color Light (0x010D)
@@ -27,8 +27,8 @@ static void create_kojima_light_endpoint(ezb_zcl_cluster_desc_t* basic, ezb_af_e
     ezb_zcl_cluster_desc_t level_cluster = ezb_af_endpoint_get_cluster_desc(*desc, EZB_ZCL_CLUSTER_ID_LEVEL, EZB_ZCL_CLUSTER_SERVER);
     if (level_cluster) 
     {
-        uint8_t min_lvl = 1;
-        uint8_t max_lvl = 254;
+        static const uint8_t min_lvl = 1;
+        static const uint8_t max_lvl = 254;
         ezb_zcl_level_cluster_desc_add_attr(level_cluster, EZB_ZCL_ATTR_LEVEL_MIN_LEVEL_ID, &min_lvl);
         ezb_zcl_level_cluster_desc_add_attr(level_cluster, EZB_ZCL_ATTR_LEVEL_MAX_LEVEL_ID, &max_lvl);
     }

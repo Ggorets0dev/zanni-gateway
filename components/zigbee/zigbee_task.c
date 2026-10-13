@@ -8,6 +8,7 @@
 #include "ezbee/core.h"
 #include "ezbee/app_signals.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_random.h"
 #include "esp_ieee802154.h"
 
@@ -21,10 +22,17 @@
 #define ZIGBEE_CHANNEL_MASK     0x07FFF800U
 #define TAG                     g_module_tag[MODULE_ZIGBEE]
 
+#define BRIGHTNESS_BASE_PCT     20
+#define BRIGHTNESS_STEP_PCT     5
+
+static uint8_t s_current_level = 254;
+static int64_t s_last_level_time = 0;
+static int64_t s_last_on_off_time = 0;
+
 static void setup_all_local_states(void)
 {
-    zigbee_update_brightness(1, 0, true);
-    zigbee_update_on_off(1, false, true);
+    zigbee_update_brightness(1, 25, true);
+    zigbee_update_on_off(1, true, true);
 }
 
 static void setup_all_spoofing(void)
@@ -136,47 +144,76 @@ static void process_level_command(uint8_t level)
         return;
     }
 
-    // Convert Zigbee Level (1..254) to percentage (1..100%)
-    uint8_t pct = (uint8_t)(((uint32_t)level * 100 + 127) / 254);
-    if (pct == 0)
+    // Convert Zigbee Level (25..254) to app percentage (1..100%).
+    // Tuya/Sber hub maps 0..100% to 25..254 (level = 25 + pct * 229 / 100).
+    uint8_t pct;
+    if (level <= 25)
     {
         pct = 1;
     }
-    if (pct > 100)
+    else if (level >= 254)
     {
         pct = 100;
     }
-
-    uint8_t sw_idx = (pct - 1) / 2;
-    bool state = ((pct - 1) % 2 == 0); // 1, 3, 5... -> ENABLE; 2, 4, 6... -> DISABLE
-
-    if (sw_idx >= DEVS_COUNT)
+    else
     {
-        ESP_LOGW(TAG, "Brightness %d%% (level %d) maps to switch %d, but DEVS_COUNT=%d",
-                 pct, level, sw_idx + 1, DEVS_COUNT);
-        return;
+        pct = (uint8_t)(((uint32_t)(level - 25) * 100 + 114) / 229);
+        if (pct == 0)
+        {
+            pct = 1;
+        }
     }
 
-    ESP_LOGI(TAG, "Brightness %d%% (level %d) -> Switch %d (node %d, tag %s): %s",
-             pct, level, sw_idx + 1, zanni_virt_devs[sw_idx].node_id, zanni_virt_devs[sw_idx].tag,
-             state ? "ENABLE" : "DISABLE");
-
-    static gate_msg_t gate_msg;
-    static status_msg_t status_msg = 
+    if (pct < BRIGHTNESS_BASE_PCT)
     {
-        .module = MODULE_ZIGBEE,
-        .status = MODULE_STATUS_TX
-    };
+        ESP_LOGI(TAG, "Brightness %d%% (level %d) is below base %d%%, bulb state updated only",
+                 pct, level, BRIGHTNESS_BASE_PCT);
+    }
+    else
+    {
+        uint8_t slot = (pct - BRIGHTNESS_BASE_PCT) / BRIGHTNESS_STEP_PCT;
+        uint8_t sw_idx = slot / 2;
+        bool state = (slot % 2 == 0); // slot 0, 2, 4... -> ENABLE; slot 1, 3, 5... -> DISABLE
 
-    gate_msg.node_id = zanni_virt_devs[sw_idx].node_id;
-    gate_msg.payload.device_type = zanni_virt_devs[sw_idx].type;
-    gate_msg.payload.status = state;
-    snprintf(gate_msg.payload.tag, sizeof(gate_msg.payload.tag), "%.7s", zanni_virt_devs[sw_idx].tag);
+        if (sw_idx < DEVS_COUNT)
+        {
+            uint8_t range_start = BRIGHTNESS_BASE_PCT + slot * BRIGHTNESS_STEP_PCT;
+            uint8_t range_end = range_start + BRIGHTNESS_STEP_PCT - 1;
 
-    status_queue_send(status_msg, 0);
-    net_queue_send(&gate_msg);
+            ESP_LOGI(TAG, "Brightness %d%% (level %d) in range [%d..%d%%] -> Switch %d (node %d, tag %s): %s",
+                     pct, level, range_start, range_end,
+                     sw_idx + 1, zanni_virt_devs[sw_idx].node_id, zanni_virt_devs[sw_idx].tag,
+                     state ? "ENABLE" : "DISABLE");
 
-    zigbee_update_brightness(1, level, false);
+            static gate_msg_t gate_msg;
+            static status_msg_t status_msg = 
+            {
+                .module = MODULE_ZIGBEE,
+                .status = MODULE_STATUS_TX
+            };
+
+            gate_msg.node_id = zanni_virt_devs[sw_idx].node_id;
+            gate_msg.payload.device_type = zanni_virt_devs[sw_idx].type;
+            gate_msg.payload.status = state;
+            snprintf(gate_msg.payload.tag, sizeof(gate_msg.payload.tag), "%.7s", zanni_virt_devs[sw_idx].tag);
+
+            status_queue_send(status_msg, 0);
+            net_queue_send(&gate_msg);
+        }
+        else
+        {
+            ESP_LOGI(TAG, "Brightness %d%% (level %d) beyond DEVS_COUNT=%d (switch %d), bulb state updated only",
+                     pct, level, DEVS_COUNT, sw_idx + 1);
+        }
+    }
+
+    uint8_t report_level = (uint8_t)(25 + ((uint32_t)pct * 229 + 50) / 100);
+    if (report_level > 254)
+    {
+        report_level = 254;
+    }
+
+    zigbee_update_brightness(1, report_level, false);
     zigbee_update_on_off(1, true, false);
 }
 
@@ -187,18 +224,40 @@ void zb_action_handler(ezb_zcl_core_action_callback_id_t callback_id, void *mess
         case EZB_ZCL_CORE_SET_ATTR_VALUE_CB_ID: 
         {
             ezb_zcl_set_attr_value_message_t *msg = (ezb_zcl_set_attr_value_message_t *)message;
+            if (!msg || msg->info.status != EZB_ZCL_STATUS_SUCCESS)
+            {
+                break;
+            }
             msg->out.result = EZB_ZCL_STATUS_SUCCESS;
 
             if (msg->info.cluster_id == EZB_ZCL_CLUSTER_ID_LEVEL && 
                 msg->in.attribute.id == EZB_ZCL_ATTR_LEVEL_CURRENT_LEVEL_ID) 
             {
                 uint8_t level = *(uint8_t *)msg->in.attribute.data.value;
+                int64_t now = esp_timer_get_time();
+                bool is_on_off_side_effect = (now - s_last_on_off_time < 1000000);
+                bool is_rapid_duplicate = ((now - s_last_level_time < 1000000) && (level == s_current_level));
+
+                if (level == s_current_level && is_on_off_side_effect)
+                {
+                    ESP_LOGI(TAG, "Ignoring duplicate level %d (old level side-effect of On/Off command)", level);
+                    break;
+                }
+                if (is_rapid_duplicate)
+                {
+                    ESP_LOGI(TAG, "Ignoring rapid duplicate level %d", level);
+                    break;
+                }
+
+                s_last_level_time = now;
+                s_current_level = level;
                 process_level_command(level);
             }
             else if (msg->info.cluster_id == EZB_ZCL_CLUSTER_ID_ON_OFF && 
                      msg->in.attribute.id == EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID) 
             {
                 bool on_off = *(bool *)msg->in.attribute.data.value;
+                s_last_on_off_time = esp_timer_get_time();
                 ESP_LOGI(TAG, "Bulb On/Off command received: %s", on_off ? "ON" : "OFF");
                 zigbee_update_on_off(msg->info.dst_ep, on_off, false);
             }
