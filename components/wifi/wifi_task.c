@@ -159,9 +159,9 @@ void wifi_task(void *pvParameter)
         // TRANSMIT MESSAGES
         const bool is_any = net_queue_receive(&msg, WIFI_TASK_READ_DELAY);
 
-        if (is_any && msg.node_id < DEVS_COUNT)
+        if (is_any && msg.node_id - 1 < DEVS_COUNT)
         {
-            const int curr_sock = socks[msg.node_id];
+            const int curr_sock = socks[msg.node_id - 1];
 
             if (curr_sock == -1) continue;
 

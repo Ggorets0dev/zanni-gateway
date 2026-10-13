@@ -28,7 +28,6 @@ static void update_attr_and_report(uint8_t endpoint,
         );
     }
 
-
     ezb_zcl_report_attr_cmd_t report_cmd = 
     {
         .cmd_ctrl = 
@@ -54,7 +53,16 @@ static void update_attr_and_report(uint8_t endpoint,
     ezb_zcl_report_attr_cmd_req(&report_cmd);
 }
 
-void zigbee_update_relay_state(uint8_t endpoint, bool state, bool is_set_attr) 
+void zigbee_update_brightness(uint8_t endpoint, uint8_t level, bool is_set_attr) 
+{
+    update_attr_and_report(endpoint,
+                            EZB_ZCL_CLUSTER_ID_LEVEL,
+                            EZB_ZCL_ATTR_LEVEL_CURRENT_LEVEL_ID,
+                            &level,
+                            is_set_attr);
+}
+
+void zigbee_update_on_off(uint8_t endpoint, bool state, bool is_set_attr) 
 {
     update_attr_and_report(endpoint,
                             EZB_ZCL_CLUSTER_ID_ON_OFF,

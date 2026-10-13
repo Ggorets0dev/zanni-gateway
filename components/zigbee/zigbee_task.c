@@ -23,19 +23,13 @@
 
 static void setup_all_local_states(void)
 {
-    for (uint8_t i = 0; i < DEVS_COUNT; ++i)
-    {
-        // FIXME: Now only relay is supported
-        zigbee_update_relay_state(i + 1, false, true);
-    }
+    zigbee_update_brightness(1, 0, true);
+    zigbee_update_on_off(1, false, true);
 }
 
 static void setup_all_spoofing(void)
 {
-    for (uint8_t i = 0; i < DEVS_COUNT; ++i)
-    {
-        zigbee_apply_spoofing(i + 1, zanni_virt_devs[i].type);
-    }  
+    zigbee_apply_spoofing(1);
 }
 
 static bool app_signal_handler(const ezb_app_signal_t *signal) 
@@ -65,7 +59,7 @@ static bool app_signal_handler(const ezb_app_signal_t *signal)
                 
                 if (!ezb_bdb_is_factory_new()) 
                 {
-                    ESP_LOGI(TAG, "✓ Устройство уже в сети после перезагрузки. Синхронизируем состояние (ВЫКЛ)...");
+                    ESP_LOGI(TAG, "✓ Устройство уже в сети после перезагрузки. Синхронизируем состояние (0%)...");
                     setup_all_local_states();
 
                     system_events_set_bits(SYS_EVENT_ZIGBEE_CONNECTED_BIT);
@@ -92,7 +86,7 @@ static bool app_signal_handler(const ezb_app_signal_t *signal)
             {
                 setup_all_spoofing();
                 
-                ESP_LOGI(TAG, "✓ Подключено к сети! Синхронизируем состояние с хабом (ВЫКЛ)...");
+                ESP_LOGI(TAG, "✓ Подключено к сети! Синхронизируем состояние с хабом (0%)...");
                 setup_all_local_states();
 
                 system_events_set_bits(SYS_EVENT_ZIGBEE_CONNECTED_BIT);
@@ -126,66 +120,96 @@ static bool app_signal_handler(const ezb_app_signal_t *signal)
         }
 
         default:
-            // Логируем ВСЕ неизвестные сигналы — помогает понять что делает хаб после join
             ESP_LOGI(TAG, "[SIGNAL] Unknown sig_type=0x%04X", (unsigned)sig_type);
             break;
     }
     return false;
 }
 
-void zb_action_handler(ezb_zcl_core_action_callback_id_t callback_id, void *message) {
+static void process_level_command(uint8_t level)
+{
+    if (level == 0)
+    {
+        ESP_LOGI(TAG, "Brightness level 0 (0%%) received, lamp turned OFF");
+        zigbee_update_brightness(1, 0, false);
+        zigbee_update_on_off(1, false, false);
+        return;
+    }
+
+    // Convert Zigbee Level (1..254) to percentage (1..100%)
+    uint8_t pct = (uint8_t)(((uint32_t)level * 100 + 127) / 254);
+    if (pct == 0)
+    {
+        pct = 1;
+    }
+    if (pct > 100)
+    {
+        pct = 100;
+    }
+
+    uint8_t sw_idx = (pct - 1) / 2;
+    bool state = ((pct - 1) % 2 == 0); // 1, 3, 5... -> ENABLE; 2, 4, 6... -> DISABLE
+
+    if (sw_idx >= DEVS_COUNT)
+    {
+        ESP_LOGW(TAG, "Brightness %d%% (level %d) maps to switch %d, but DEVS_COUNT=%d",
+                 pct, level, sw_idx + 1, DEVS_COUNT);
+        return;
+    }
+
+    ESP_LOGI(TAG, "Brightness %d%% (level %d) -> Switch %d (node %d, tag %s): %s",
+             pct, level, sw_idx + 1, zanni_virt_devs[sw_idx].node_id, zanni_virt_devs[sw_idx].tag,
+             state ? "ENABLE" : "DISABLE");
+
     static gate_msg_t gate_msg;
-    
     static status_msg_t status_msg = 
     {
         .module = MODULE_ZIGBEE,
         .status = MODULE_STATUS_TX
     };
 
+    gate_msg.node_id = zanni_virt_devs[sw_idx].node_id;
+    gate_msg.payload.device_type = zanni_virt_devs[sw_idx].type;
+    gate_msg.payload.status = state;
+    snprintf(gate_msg.payload.tag, sizeof(gate_msg.payload.tag), "%.7s", zanni_virt_devs[sw_idx].tag);
+
+    status_queue_send(status_msg, 0);
+    net_queue_send(&gate_msg);
+
+    zigbee_update_brightness(1, level, false);
+    zigbee_update_on_off(1, true, false);
+}
+
+void zb_action_handler(ezb_zcl_core_action_callback_id_t callback_id, void *message) 
+{
     switch (callback_id) 
     {
         case EZB_ZCL_CORE_SET_ATTR_VALUE_CB_ID: 
         {
             ezb_zcl_set_attr_value_message_t *msg = (ezb_zcl_set_attr_value_message_t *)message;
-            
             msg->out.result = EZB_ZCL_STATUS_SUCCESS;
 
-            if (msg->info.cluster_id == EZB_ZCL_CLUSTER_ID_ON_OFF && 
-                msg->in.attribute.id == EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID) 
+            if (msg->info.cluster_id == EZB_ZCL_CLUSTER_ID_LEVEL && 
+                msg->in.attribute.id == EZB_ZCL_ATTR_LEVEL_CURRENT_LEVEL_ID) 
             {
-                
-                bool state = *(bool *)msg->in.attribute.data.value;
-                
-                ESP_LOGI(TAG, "Collected command for Endpoint %d: %s", 
-                         msg->info.dst_ep, 
-                         state ? "ENABLE" : "DISABLE");
-                
-                if (msg->info.dst_ep == 0 || msg->info.dst_ep > DEVS_COUNT)
-                {
-                    ESP_LOGW(TAG, "Command for unexpected dst_ep: %d", msg->info.dst_ep);
-                    break;
-                }
-
-                const uint8_t inx = msg->info.dst_ep - 1;
-
-                gate_msg.node_id = zanni_virt_devs[inx].node_id;
-                gate_msg.payload.device_type = zanni_virt_devs[inx].type;
-                gate_msg.payload.status = state;
-                snprintf(gate_msg.payload.tag, sizeof(gate_msg.payload.tag), "%.7s", zanni_virt_devs[inx].tag);
-
-                status_queue_send(status_msg, 0);
-                net_queue_send(&gate_msg);
-
-                zigbee_update_relay_state(msg->info.dst_ep, state, false);
+                uint8_t level = *(uint8_t *)msg->in.attribute.data.value;
+                process_level_command(level);
+            }
+            else if (msg->info.cluster_id == EZB_ZCL_CLUSTER_ID_ON_OFF && 
+                     msg->in.attribute.id == EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID) 
+            {
+                bool on_off = *(bool *)msg->in.attribute.data.value;
+                ESP_LOGI(TAG, "Bulb On/Off command received: %s", on_off ? "ON" : "OFF");
+                zigbee_update_on_off(msg->info.dst_ep, on_off, false);
             }
             break;
         }
+
         default:
             ESP_LOGW(TAG, "Unhandled ZCL action callback_id: %d", callback_id);
             break;
     }
 }
-
 
 void zigbee_task(void *pvParameters) 
 {

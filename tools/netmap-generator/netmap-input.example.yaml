@@ -1,9 +1,12 @@
 nodes:
-  - id: 0
+  - id: 1
     ip: 192.168.1.118
     port: 9199
 
 virtual_devices:
   - tag: "DEV1"
     type: "toggle"
-    node_id: 0
+    node_id: 1
+  - tag: "DEV2"
+    type: "toggle"
+    node_id: 1
