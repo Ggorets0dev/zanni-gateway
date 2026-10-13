@@ -25,12 +25,11 @@
 #define BRIGHTNESS_BASE_PCT     20
 #define BRIGHTNESS_STEP_PCT     5
 
-static uint8_t s_current_level = 254;
-static int64_t s_last_level_time = 0;
-static int64_t s_last_on_off_time = 0;
+static uint8_t s_current_level = 25;
 
 static void setup_all_local_states(void)
 {
+    s_current_level = 25;
     zigbee_update_brightness(1, 25, true);
     zigbee_update_on_off(1, true, true);
 }
@@ -138,6 +137,7 @@ static void process_level_command(uint8_t level)
 {
     if (level == 0)
     {
+        s_current_level = 0;
         ESP_LOGI(TAG, "Brightness level 0 (0%%) received, lamp turned OFF");
         zigbee_update_brightness(1, 0, false);
         zigbee_update_on_off(1, false, false);
@@ -213,6 +213,8 @@ static void process_level_command(uint8_t level)
         report_level = 254;
     }
 
+    s_current_level = report_level;
+
     zigbee_update_brightness(1, report_level, false);
     zigbee_update_on_off(1, true, false);
 }
@@ -234,22 +236,14 @@ void zb_action_handler(ezb_zcl_core_action_callback_id_t callback_id, void *mess
                 msg->in.attribute.id == EZB_ZCL_ATTR_LEVEL_CURRENT_LEVEL_ID) 
             {
                 uint8_t level = *(uint8_t *)msg->in.attribute.data.value;
-                int64_t now = esp_timer_get_time();
-                bool is_on_off_side_effect = (now - s_last_on_off_time < 1000000);
-                bool is_rapid_duplicate = ((now - s_last_level_time < 1000000) && (level == s_current_level));
 
-                if (level == s_current_level && is_on_off_side_effect)
+                if (level == s_current_level)
                 {
-                    ESP_LOGI(TAG, "Ignoring duplicate level %d (old level side-effect of On/Off command)", level);
-                    break;
-                }
-                if (is_rapid_duplicate)
-                {
-                    ESP_LOGI(TAG, "Ignoring rapid duplicate level %d", level);
+                    ESP_LOGI(TAG, "Level %d unchanged (same as current %d), ignoring duplicate",
+                             level, s_current_level);
                     break;
                 }
 
-                s_last_level_time = now;
                 s_current_level = level;
                 process_level_command(level);
             }
@@ -257,7 +251,6 @@ void zb_action_handler(ezb_zcl_core_action_callback_id_t callback_id, void *mess
                      msg->in.attribute.id == EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID) 
             {
                 bool on_off = *(bool *)msg->in.attribute.data.value;
-                s_last_on_off_time = esp_timer_get_time();
                 ESP_LOGI(TAG, "Bulb On/Off command received: %s", on_off ? "ON" : "OFF");
                 zigbee_update_on_off(msg->info.dst_ep, on_off, false);
             }
