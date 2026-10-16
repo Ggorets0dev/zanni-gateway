@@ -1,4 +1,8 @@
-idf_component_register(SRCS "net_queue.c" "status_queue.c" "system_events.c"
+idf_component_register(SRCS 
+                    "net_queue.c" 
+                    "status_queue.c" 
+                    "system_events.c" 
+                    "dev_state.c"
                     INCLUDE_DIRS "include")
 
 include(FetchContent)

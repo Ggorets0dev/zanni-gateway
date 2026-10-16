@@ -144,25 +144,7 @@ static void process_level_command(uint8_t level)
         return;
     }
 
-    // Convert Zigbee Level (25..254) to app percentage (1..100%).
-    // Tuya/Sber hub maps 0..100% to 25..254 (level = 25 + pct * 229 / 100).
-    uint8_t pct;
-    if (level <= 25)
-    {
-        pct = 1;
-    }
-    else if (level >= 254)
-    {
-        pct = 100;
-    }
-    else
-    {
-        pct = (uint8_t)(((uint32_t)(level - 25) * 100 + 114) / 229);
-        if (pct == 0)
-        {
-            pct = 1;
-        }
-    }
+    const uint8_t pct = zigbee_level_to_pct(level);
 
     if (pct < BRIGHTNESS_BASE_PCT)
     {
@@ -207,13 +189,8 @@ static void process_level_command(uint8_t level)
         }
     }
 
-    uint8_t report_level = (uint8_t)(25 + ((uint32_t)pct * 229 + 50) / 100);
-    if (report_level > 254)
-    {
-        report_level = 254;
-    }
-
-    s_current_level = report_level;
+    const uint8_t report_level = zigbee_pct_to_level(pct);
+    s_current_level = level;
 
     zigbee_update_brightness(1, report_level, false);
     zigbee_update_on_off(1, true, false);

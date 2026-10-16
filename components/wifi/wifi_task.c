@@ -19,9 +19,9 @@
 #define WIFI_TASK_READ_DELAY        1000u
 #define WIFI_TASK_WAIT_DELAY        1000u
 
-#define KEEP_ALIVE_IDLE_SEC         30
+#define KEEP_ALIVE_IDLE_SEC         20
 #define KEEP_ALIVE_INTERVAL_SEC     10
-#define KEEP_ALIVE_ATTEMPTS_CNT     3
+#define KEEP_ALIVE_ATTEMPTS_CNT     2
 
 static void configure_keepalive(int sock)
 {
