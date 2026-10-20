@@ -1,4 +1,4 @@
-#include "zigbee_task.h"
+#include "zigbee_zboss_task.h"
 #include "esp_zigbee.h"
 #include "ezbee/zha.h"
 #include "ezbee/zcl.h"
@@ -18,14 +18,12 @@
 #include "zigbee_transport.h"
 #include "netmap.h"
 #include "system_events.h"
+#include "dev_state.h"
 
 #define ZIGBEE_CHANNEL_MASK     0x07FFF800U
-#define TAG                     g_module_tag[MODULE_ZIGBEE]
+#define TAG                     g_module_config[MODULE_ZIGBEE_ZBOSS].tag
 
-#define BRIGHTNESS_BASE_PCT     20
-#define BRIGHTNESS_STEP_PCT     5
-
-static uint8_t s_current_level = 25;
+static uint8_t s_current_level;
 
 static void setup_all_local_states(void)
 {
@@ -133,7 +131,7 @@ static bool app_signal_handler(const ezb_app_signal_t *signal)
     return false;
 }
 
-static void process_level_command(uint8_t level)
+static void process_level_command(const uint8_t level)
 {
     if (level == 0)
     {
@@ -155,32 +153,45 @@ static void process_level_command(uint8_t level)
     {
         uint8_t slot = (pct - BRIGHTNESS_BASE_PCT) / BRIGHTNESS_STEP_PCT;
         uint8_t sw_idx = slot / 2;
-        bool state = (slot % 2 == 0); // slot 0, 2, 4... -> ENABLE; slot 1, 3, 5... -> DISABLE
+        bool new_state = (slot % 2 == 0); // slot 0, 2, 4... -> ENABLE; slot 1, 3, 5... -> DISABLE
+        bool old_state = false;
 
-        if (sw_idx < DEVS_COUNT)
+        int rc = dev_toggle_get_state(sw_idx, &old_state);
+
+        ESP_LOGI(TAG, "Current dev state: [dev_inx=%u, state=%u]", sw_idx, old_state);
+
+        if (rc == 0)
         {
-            uint8_t range_start = BRIGHTNESS_BASE_PCT + slot * BRIGHTNESS_STEP_PCT;
-            uint8_t range_end = range_start + BRIGHTNESS_STEP_PCT - 1;
-
-            ESP_LOGI(TAG, "Brightness %d%% (level %d) in range [%d..%d%%] -> Switch %d (node %d, tag %s): %s",
-                     pct, level, range_start, range_end,
-                     sw_idx + 1, zanni_virt_devs[sw_idx].node_id, zanni_virt_devs[sw_idx].tag,
-                     state ? "ENABLE" : "DISABLE");
-
-            static gate_msg_t gate_msg;
-            static status_msg_t status_msg = 
+            if (old_state != new_state)
             {
-                .module = MODULE_ZIGBEE,
-                .status = MODULE_STATUS_TX
-            };
-
-            gate_msg.node_id = zanni_virt_devs[sw_idx].node_id;
-            gate_msg.payload.device_type = zanni_virt_devs[sw_idx].type;
-            gate_msg.payload.status = state;
-            snprintf(gate_msg.payload.tag, sizeof(gate_msg.payload.tag), "%.7s", zanni_virt_devs[sw_idx].tag);
-
-            status_queue_send(status_msg, 0);
-            net_queue_send(&gate_msg);
+                const uint8_t range_start = BRIGHTNESS_BASE_PCT + slot * BRIGHTNESS_STEP_PCT;
+                const uint8_t range_end = range_start + BRIGHTNESS_STEP_PCT - 1;
+                
+                ESP_LOGI(TAG, "Brightness %d%% (level %d) in range [%d..%d%%] -> Switch %d (node %d, tag %s): %s",
+                    pct, level, range_start, range_end,
+                    sw_idx + 1, zanni_virt_devs[sw_idx].node_id, zanni_virt_devs[sw_idx].tag,
+                    new_state ? "ENABLE" : "DISABLE");
+                    
+                    static gate_msg_t gate_msg;
+                    static status_msg_t status_msg = 
+                    {
+                        .module = MODULE_ZIGBEE_ZBOSS,
+                        .status = MODULE_STATUS_TX
+                    };
+                    
+                    gate_msg.node_id = zanni_virt_devs[sw_idx].node_id;
+                    gate_msg.payload.device_type = zanni_virt_devs[sw_idx].type;
+                    gate_msg.payload.payload.dev_status = new_state;
+                    snprintf(gate_msg.payload.tag, sizeof(gate_msg.payload.tag), "%.7s", zanni_virt_devs[sw_idx].tag);
+                    
+                    status_queue_send(status_msg, 0);
+                    net_queue_send(&gate_msg);
+            }
+            else
+            {
+                ESP_LOGI(TAG, "Brightness %d%% (level %d) is equal state (switch %d), no bulb state update",
+                     pct, level, sw_idx + 1);
+            }
         }
         else
         {
@@ -192,8 +203,8 @@ static void process_level_command(uint8_t level)
     const uint8_t report_level = zigbee_pct_to_level(pct);
     s_current_level = level;
 
-    zigbee_update_brightness(1, report_level, false);
-    zigbee_update_on_off(1, true, false);
+    // zigbee_update_brightness(1, report_level, false);
+    // zigbee_update_on_off(1, true, false);
 }
 
 void zb_action_handler(ezb_zcl_core_action_callback_id_t callback_id, void *message) 
@@ -240,7 +251,7 @@ void zb_action_handler(ezb_zcl_core_action_callback_id_t callback_id, void *mess
     }
 }
 
-void zigbee_task(void *pvParameters) 
+void zigbee_zboss_task(void *pvParameters) 
 {
     ESP_LOGI(TAG, "Waiting for Wi-Fi connection before starting Zigbee...");
     system_events_wait_bits(SYS_EVENT_WIFI_CONNECTED_BIT, portMAX_DELAY);

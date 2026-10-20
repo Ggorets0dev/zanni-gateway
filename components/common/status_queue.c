@@ -27,7 +27,7 @@ bool status_queue_send(status_msg_t status, uint32_t delay_ms)
     return xQueueSend(
         status_queue,
         &status,
-        pdMS_TO_TICKS(delay_ms)
+        (delay_ms == portMAX_DELAY) ? portMAX_DELAY : pdMS_TO_TICKS(delay_ms)
     ) == pdPASS;
 }
 
@@ -41,6 +41,6 @@ bool status_queue_receive(status_msg_t* status, uint32_t delay_ms)
     return xQueueReceive(
         status_queue,
         status,
-        pdMS_TO_TICKS(delay_ms)
+        (delay_ms == portMAX_DELAY) ? portMAX_DELAY : pdMS_TO_TICKS(delay_ms)
     ) == pdPASS;
 }

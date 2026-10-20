@@ -14,4 +14,4 @@ bool net_queue_init(void);
 
 bool net_queue_send(gate_msg_t* msg);
 
-bool net_queue_receive(gate_msg_t* status, uint32_t delay_ms);
+bool net_queue_receive(gate_msg_t* msg, uint32_t delay_ms);

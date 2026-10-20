@@ -12,7 +12,7 @@
 #include "esp_log.h"
 #include "module.h"
 
-#define TAG g_module_tag[MODULE_ZIGBEE]
+#define TAG     g_module_config[MODULE_ZIGBEE_ZBOSS].tag
 
 static void update_attr_and_report(uint8_t endpoint,
                                     uint16_t cluster_id,
@@ -121,4 +121,10 @@ uint8_t zigbee_pct_to_level(const uint8_t pct)
     }
 
     return level;
+}
+
+uint8_t zigbee_state_to_level(uint8_t dev_inx, bool state)
+{
+    const uint8_t pct = BRIGHTNESS_BASE_PCT + (BRIGHTNESS_STEP_PCT * dev_inx * 2) + (!state * BRIGHTNESS_STEP_PCT);
+    return zigbee_pct_to_level(pct);
 }

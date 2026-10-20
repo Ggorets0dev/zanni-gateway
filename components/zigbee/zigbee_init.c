@@ -9,7 +9,7 @@
 #include "netmap.h"
 #include "module.h"
 
-#define TAG     g_module_tag[MODULE_ZIGBEE]
+#define TAG     g_module_config[MODULE_ZIGBEE_ZBOSS].tag
 
 static char s_kojima_manuf[] = "\x10""_TZ3210_b3kiq1i0";
 static char s_kojima_model[] = "\x07""TS0505B";

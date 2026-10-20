@@ -20,7 +20,7 @@
 #error "WIFI PASS is not specified during build"
 #endif
 
-#define TAG     g_module_tag[MODULE_WIFI]
+#define TAG     g_module_config[MODULE_WIFI].tag
 
 static void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data) 
