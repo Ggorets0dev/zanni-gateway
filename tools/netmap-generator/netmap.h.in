@@ -27,14 +27,28 @@ typedef struct
     zanni_virt_dev_e type;
 } zanni_virt_dev_t;
 
-static const zanni_node_t zanni_nodes[@NODES_COUNT] =
+static const zanni_node_t zanni_nodes[NODES_COUNT] =
 {
     // { "192.168.1.10", 8080, 0 },
     @NODES
 };
 
-static const zanni_virt_dev_t zanni_virt_devs[@DEVS_COUNT] =
+static const zanni_virt_dev_t zanni_virt_devs[DEVS_COUNT] =
 {
     // { "DEV1", 0, ZANNI_VIRT_DEV_TOGGLE }
     @DEVS
 };
+
+static int zanni_virt_dev_find_index(const char *tag)
+{
+    if (tag == NULL)
+        return -1;
+
+    for (int i = 0; i < DEVS_COUNT; i++)
+    {
+        if (strcmp(zanni_virt_devs[i].tag, tag) == 0)
+            return i;
+    }
+
+    return -1;
+}

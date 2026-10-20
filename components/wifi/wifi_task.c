@@ -14,14 +14,15 @@
 #include "wifi_init.h"
 #include "net_queue.h"
 #include "status_queue.h"
+#include "zb_state_queue.h"
 
-#define TAG                         g_module_tag[MODULE_WIFI]
+#define TAG                         g_module_config[MODULE_WIFI].tag
 #define WIFI_TASK_READ_DELAY        1000u
 #define WIFI_TASK_WAIT_DELAY        1000u
 
-#define KEEP_ALIVE_IDLE_SEC         30
+#define KEEP_ALIVE_IDLE_SEC         20
 #define KEEP_ALIVE_INTERVAL_SEC     10
-#define KEEP_ALIVE_ATTEMPTS_CNT     3
+#define KEEP_ALIVE_ATTEMPTS_CNT     2
 
 static void configure_keepalive(int sock)
 {
@@ -53,7 +54,7 @@ static int connect_to_node(const char* host, int port)
     configure_keepalive(sock);
 
     struct timeval timeout;
-    timeout.tv_sec = 1;     // timeout
+    timeout.tv_sec = 5;     // timeout
     timeout.tv_usec = 0;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
@@ -63,7 +64,6 @@ static int connect_to_node(const char* host, int port)
     
     if (err != 0)
     {
-        ESP_LOGE(TAG, "Socket connection failed: errno %d", errno);
         close(sock);
         return -1;
     }
@@ -71,23 +71,40 @@ static int connect_to_node(const char* host, int port)
     return sock;
 }
 
-static bool send_msg_to_node(const int sock, zanni_message_t* msg)
+static bool send_req_to_node(const int sock, const zanni_message_t* msg)
 {
-    uint8_t payload[ZANNI_MSG_SIZE] = {0};
+    uint8_t buffer[ZANNI_MSG_SIZE] = {0};
 
-    zanni_message_encode(msg, payload, sizeof(payload));
+    zanni_message_encode(msg, buffer, sizeof(buffer));
 
     ESP_LOGI(TAG, "Socket connected, sending data...");
-    int err = send(sock, payload, ZANNI_MSG_SIZE, 0);
+    int err = send(sock, buffer, ZANNI_MSG_SIZE, 0);
     if (err < 0)
     {
         ESP_LOGE(TAG, "Failed to send data: errno %d", errno);
         return false;
     }
     
-    ESP_LOGI(TAG, "Message sent: %s", payload);
+    ESP_LOGI(TAG, "Message sent: %s", buffer);
     
     return true;
+}
+
+static bool recv_resp_from_node(const int sock, zanni_message_t* msg_out)
+{
+    uint8_t buffer[ZANNI_MSG_SIZE] = {0};
+
+    const ssize_t bytes_read = recv(sock, buffer, sizeof(buffer), 0);
+
+    if (bytes_read <= 0)
+    {
+        ESP_LOGE(TAG, "Failed to recv data: errno %d", errno);
+        return false;
+    }
+
+    const zanni_decode_status_e status = zanni_message_decode(buffer, sizeof(buffer), msg_out);
+    
+    return (status == ZANNI_DCD_STATUS_OK);
 }
 
 static void close_connections(int socks[NODES_COUNT])
@@ -139,10 +156,17 @@ void wifi_task(void *pvParameter)
         // COLLECT CONNECT STATUS
         for (uint16_t i = 0; i < NODES_COUNT; ++i)
         {
-            if (socks[i] == -1)
+            if (socks[i] != -1) continue;
+
+            socks[i] = connect_to_node(zanni_nodes[i].ip, zanni_nodes[i].port);
+
+            if (socks[i] != -1)
             {
-                // Connection is not ready
-                socks[i] = connect_to_node(zanni_nodes[i].ip, zanni_nodes[i].port);
+                ESP_LOGI(TAG, "Socket connection completed: [dst=%s:%d]", zanni_nodes[i].ip, zanni_nodes[i].port);
+            }
+            else
+            {
+                ESP_LOGE(TAG, "Socket connection failed: [dst=%s:%d, errno=%d]", zanni_nodes[i].ip, zanni_nodes[i].port, errno);
             }
 
             is_all_connected &= (socks[i] != -1);
@@ -159,14 +183,22 @@ void wifi_task(void *pvParameter)
         // TRANSMIT MESSAGES
         const bool is_any = net_queue_receive(&msg, WIFI_TASK_READ_DELAY);
 
-        if (is_any && msg.node_id < DEVS_COUNT)
+        if (is_any && msg.node_id - 1 < DEVS_COUNT)
         {
-            const int curr_sock = socks[msg.node_id];
+            const int curr_sock = socks[msg.node_id - 1];
 
             if (curr_sock == -1) continue;
 
-            rc = send_msg_to_node(curr_sock, &msg.payload);
+            rc = send_req_to_node(curr_sock, &msg.payload);
+            
+            if (!rc) continue;
+            
             rc = status_queue_send(status_msg, 0);
+            rc = recv_resp_from_node(curr_sock, &msg.payload);
+
+            if (!rc) continue;
+
+            rc = zb_state_queue_send(&msg.payload);
         }
     }
 }

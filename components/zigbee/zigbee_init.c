@@ -9,36 +9,40 @@
 #include "netmap.h"
 #include "module.h"
 
-#define TAG     g_module_tag[MODULE_ZIGBEE]
+#define TAG     g_module_config[MODULE_ZIGBEE_ZBOSS].tag
 
+static char s_kojima_manuf[] = "\x10""_TZ3210_b3kiq1i0";
+static char s_kojima_model[] = "\x07""TS0505B";
 
-static char* spoofing_records[ZANNI_VIRT_DEV_MAX][2] = 
+static void create_kojima_light_endpoint(ezb_zcl_cluster_desc_t* basic, ezb_af_ep_desc_t* desc, uint8_t ep_id)
 {
-    [ZANNI_VIRT_DEV_TOGGLE] = {"\x06""SONOFF", "\x09""BASICZBR3"}
-};
+    ezb_zha_color_dimmable_light_config_t light_cfg = EZB_ZHA_COLOR_DIMMABLE_LIGHT_CONFIG();
+    light_cfg.on_off_cfg.on_off = false;
+    light_cfg.level_cfg.current_level = 254;
 
-static void create_toggle_endpoint(ezb_zcl_cluster_desc_t* basic, ezb_af_ep_desc_t* desc, uint8_t ep_id)
-{
-    ezb_zha_on_off_light_config_t light_cfg = EZB_ZHA_ON_OFF_LIGHT_CONFIG();
-    *desc = ezb_zha_create_on_off_light(ep_id, &light_cfg);
+    *desc = ezb_zha_create_color_dimmable_light(ep_id, &light_cfg);
+    ezb_af_ep_desc_set_app_device_id(*desc, 0x010D); // Extended Color Light (0x010D)
     *basic = ezb_af_endpoint_get_cluster_desc(*desc, EZB_ZCL_CLUSTER_ID_BASIC, EZB_ZCL_CLUSTER_SERVER);
+
+    ezb_zcl_cluster_desc_t level_cluster = ezb_af_endpoint_get_cluster_desc(*desc, EZB_ZCL_CLUSTER_ID_LEVEL, EZB_ZCL_CLUSTER_SERVER);
+    if (level_cluster) 
+    {
+        static const uint8_t min_lvl = 1;
+        static const uint8_t max_lvl = 254;
+        ezb_zcl_level_cluster_desc_add_attr(level_cluster, EZB_ZCL_ATTR_LEVEL_MIN_LEVEL_ID, &min_lvl);
+        ezb_zcl_level_cluster_desc_add_attr(level_cluster, EZB_ZCL_ATTR_LEVEL_MAX_LEVEL_ID, &max_lvl);
+    }
 }
 
-void zigbee_apply_spoofing(uint8_t endpoint, zanni_virt_dev_e dev_type)
+void zigbee_apply_spoofing(uint8_t endpoint)
 {
-    if (dev_type >= ZANNI_VIRT_DEV_MAX || spoofing_records[dev_type][0] == NULL || spoofing_records[dev_type][1] == NULL)
-    {
-        ESP_LOGW(TAG, "No spoofing record for dev_type %d", dev_type);
-        return;
-    }
-
     esp_err_t r1 = ezb_zcl_set_attr_value(
         endpoint,
         EZB_ZCL_CLUSTER_ID_BASIC,
         EZB_ZCL_CLUSTER_SERVER,
         EZB_ZCL_ATTR_BASIC_MANUFACTURER_NAME_ID,
         EZB_ZCL_STD_MANUF_CODE,
-        spoofing_records[dev_type][0],
+        s_kojima_manuf,
         false
     );
     esp_err_t r2 = ezb_zcl_set_attr_value(
@@ -47,12 +51,12 @@ void zigbee_apply_spoofing(uint8_t endpoint, zanni_virt_dev_e dev_type)
         EZB_ZCL_CLUSTER_SERVER,
         EZB_ZCL_ATTR_BASIC_MODEL_IDENTIFIER_ID,
         EZB_ZCL_STD_MANUF_CODE,
-        spoofing_records[dev_type][1],
+        s_kojima_model,
         false
     );
 
     ESP_LOGI(TAG, "Spoofing: ManufName=%s ModelID=%s (r1=%d r2=%d)",
-        spoofing_records[dev_type][0] + 1, spoofing_records[dev_type][1] + 1, r1, r2);
+        s_kojima_manuf + 1, s_kojima_model + 1, r1, r2);
 }
 
 void zanni_zigbee_init(void)
@@ -85,39 +89,15 @@ void zanni_zigbee_init(void)
 
 int zigbee_init_endpoints(ezb_af_device_desc_t dev_desc)
 {
-    int rc = 0;
-
-    for (uint8_t i = 0; i < DEVS_COUNT; ++i)
-    {
-        rc = zigbee_add_endpoint(dev_desc, zanni_virt_devs[i].type, i + 1);
-
-        if (rc != 0)
-        {
-            return 1;
-        }
-    }
-
-    return 0;
-}
-
-int zigbee_add_endpoint(ezb_af_device_desc_t dev_desc, const zanni_virt_dev_e dev_type, uint8_t ep_id)
-{
     ezb_zcl_cluster_desc_t basic = NULL;
     ezb_af_ep_desc_t desc = NULL;
 
-    if (dev_type == ZANNI_VIRT_DEV_TOGGLE)
-    {
-        create_toggle_endpoint(&basic, &desc, ep_id);
-    }
-    else
-    {
-        return 1;
-    }
+    create_kojima_light_endpoint(&basic, &desc, 1);
 
     if (basic) 
     {
-        ezb_zcl_basic_cluster_desc_add_attr(basic, EZB_ZCL_ATTR_BASIC_MANUFACTURER_NAME_ID, spoofing_records[dev_type][0]);
-        ezb_zcl_basic_cluster_desc_add_attr(basic, EZB_ZCL_ATTR_BASIC_MODEL_IDENTIFIER_ID, spoofing_records[dev_type][1]);
+        ezb_zcl_basic_cluster_desc_add_attr(basic, EZB_ZCL_ATTR_BASIC_MANUFACTURER_NAME_ID, s_kojima_manuf);
+        ezb_zcl_basic_cluster_desc_add_attr(basic, EZB_ZCL_ATTR_BASIC_MODEL_IDENTIFIER_ID, s_kojima_model);
     }
     else
     {

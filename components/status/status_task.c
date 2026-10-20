@@ -12,7 +12,7 @@
 #include "status_queue.h"
 #include "system_events.h"
 
-#define TAG                             g_module_tag[MODULE_STATUS]
+#define TAG                             g_module_config[MODULE_STATUS].tag
 
 #define STATUS_TASK_GLOBAL_PERIOD_MS    800
 #define STATUS_TASK_EVENT_PERIOD_MS     100

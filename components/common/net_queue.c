@@ -40,6 +40,6 @@ bool net_queue_receive(gate_msg_t* msg, uint32_t delay_ms)
     return xQueueReceive(
         net_queue,
         msg,
-        pdMS_TO_TICKS(delay_ms)
+        (delay_ms == portMAX_DELAY) ? portMAX_DELAY : pdMS_TO_TICKS(delay_ms)
     ) == pdPASS;
 }

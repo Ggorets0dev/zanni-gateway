@@ -8,8 +8,11 @@
 #include "status_task.h"
 #include "status_queue.h"
 #include "net_queue.h"
+#include "zb_state_queue.h"
 #include "system_events.h"
-#include "zigbee_task.h"
+#include "module.h"
+#include "zigbee_zboss_task.h"
+#include "zigbee_state_task.h"
 #include "wifi_task.h"
 #include "wifi_init.h"
 
@@ -36,6 +39,7 @@ void app_main(void)
 
     is_inited &= status_queue_init();
     is_inited &= net_queue_init();
+    is_inited &= zb_state_queue_init();
     is_inited &= system_events_init();
     
     if (!is_inited)
@@ -44,7 +48,8 @@ void app_main(void)
         esp_restart();
     }
 
-    xTaskCreate(&status_task, "status_task", 2048, NULL, 4, NULL);
-    xTaskCreate(&zigbee_task, "zigbee_task", 5120, NULL, 5, NULL);
-    xTaskCreate(&wifi_task, "wifi_task", 5120, NULL, 6, NULL);
+    MODULE_START(MODULE_STATUS, status_task, NULL);
+    MODULE_START(MODULE_ZIGBEE_ZBOSS, zigbee_zboss_task, NULL);
+    MODULE_START(MODULE_ZIGBEE_STATE, zigbee_state_task, NULL);
+    MODULE_START(MODULE_WIFI, wifi_task, NULL);
 }

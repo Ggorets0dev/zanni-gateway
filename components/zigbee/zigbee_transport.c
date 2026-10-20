@@ -9,6 +9,11 @@
 #include "ezbee/core.h"
 #include "ezbee/app_signals.h"
 
+#include "esp_log.h"
+#include "module.h"
+
+#define TAG     g_module_config[MODULE_ZIGBEE_ZBOSS].tag
+
 static void update_attr_and_report(uint8_t endpoint,
                                     uint16_t cluster_id,
                                     uint16_t attr_id,
@@ -17,7 +22,7 @@ static void update_attr_and_report(uint8_t endpoint,
 {
     if (is_set_attr)
     {
-        ezb_zcl_set_attr_value(
+        esp_err_t r = ezb_zcl_set_attr_value(
             endpoint,
             cluster_id,
             EZB_ZCL_CLUSTER_SERVER,
@@ -26,8 +31,12 @@ static void update_attr_and_report(uint8_t endpoint,
             value_ptr,
             false
         );
+        if (r != ESP_OK)
+        {
+            ESP_LOGW(TAG, "ezb_zcl_set_attr_value ep=%d cl=0x%04X attr=0x%04X err=%d",
+                     endpoint, cluster_id, attr_id, r);
+        }
     }
-
 
     ezb_zcl_report_attr_cmd_t report_cmd = 
     {
@@ -42,7 +51,7 @@ static void update_attr_and_report(uint8_t endpoint,
             {
                 .manuf_specific = 0,
                 .direction = EZB_ZCL_CMD_DIRECTION_TO_CLI,
-                .dis_default_rsp = 0
+                .dis_default_rsp = 1
             }
         },
         .payload = 
@@ -51,14 +60,71 @@ static void update_attr_and_report(uint8_t endpoint,
         }
     };
 
-    ezb_zcl_report_attr_cmd_req(&report_cmd);
+    ezb_err_t ret = ezb_zcl_report_attr_cmd_req(&report_cmd);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGW(TAG, "ezb_zcl_report_attr_cmd_req ep=%d cl=0x%04X attr=0x%04X err=%d",
+                 endpoint, cluster_id, attr_id, ret);
+    }
 }
 
-void zigbee_update_relay_state(uint8_t endpoint, bool state, bool is_set_attr) 
+void zigbee_update_brightness(uint8_t endpoint, uint8_t level, bool is_set_attr) 
+{
+    update_attr_and_report(endpoint,
+                            EZB_ZCL_CLUSTER_ID_LEVEL,
+                            EZB_ZCL_ATTR_LEVEL_CURRENT_LEVEL_ID,
+                            &level,
+                            is_set_attr);
+}
+
+void zigbee_update_on_off(uint8_t endpoint, bool state, bool is_set_attr) 
 {
     update_attr_and_report(endpoint,
                             EZB_ZCL_CLUSTER_ID_ON_OFF,
                             EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID,
                             &state,
                             is_set_attr);
+}
+
+uint8_t zigbee_level_to_pct(const uint8_t level)
+{
+    // Convert Zigbee Level (25..254) to app percentage (1..100%).
+    // Tuya/Sber hub maps 0..100% to 25..254 (level = 25 + pct * 229 / 100).
+
+    uint8_t pct = 0;
+    if (level <= 25)
+    {
+        pct = 1;
+    }
+    else if (level >= 254)
+    {
+        pct = 100;
+    }
+    else
+    {
+        pct = (uint8_t)(((uint32_t)(level - 25) * 100 + 114) / 229);
+        if (pct == 0)
+        {
+            pct = 1;
+        }
+    }
+
+    return pct;
+}
+
+uint8_t zigbee_pct_to_level(const uint8_t pct)
+{
+    uint8_t level = (uint8_t)(25 + ((uint32_t)pct * 229 + 99) / 100); 
+    if (level > 254) 
+    { 
+        level = 254; 
+    }
+
+    return level;
+}
+
+uint8_t zigbee_state_to_level(uint8_t dev_inx, bool state)
+{
+    const uint8_t pct = BRIGHTNESS_BASE_PCT + (BRIGHTNESS_STEP_PCT * dev_inx * 2) + (!state * BRIGHTNESS_STEP_PCT);
+    return zigbee_pct_to_level(pct);
 }
