@@ -20,7 +20,15 @@
 #error "WIFI PASS is not specified during build"
 #endif
 
-#define TAG     g_module_config[MODULE_WIFI].tag
+#define TAG                     g_module_config[MODULE_WIFI].tag
+#define WIFI_MODEM_TX_POWER     40
+
+static void zanni_wifi_pm_setup(void) 
+{
+    ESP_ERROR_CHECK(esp_wifi_set_max_tx_power(WIFI_MODEM_TX_POWER));
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_MIN_MODEM));
+    ESP_LOGI(TAG, "WIFI PM configuration is completed");
+}
 
 static void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data) 
@@ -30,6 +38,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
 
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) 
     {
+        zanni_wifi_pm_setup();
         esp_wifi_connect();
     } 
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) 
@@ -88,6 +97,7 @@ void zanni_wifi_init(void)
     {
         .sta = 
         {
+            .listen_interval = 3,
             .pmf_cfg = 
             {
                 .capable = true,

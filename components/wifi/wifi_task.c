@@ -193,11 +193,11 @@ void wifi_task(void *pvParameter)
             
             if (!rc) continue;
             
-            rc = status_queue_send(status_msg, 0);
             rc = recv_resp_from_node(curr_sock, &msg.payload);
-
+            
             if (!rc) continue;
-
+            
+            rc = status_queue_send(status_msg, 0);
             rc = zb_state_queue_send(&msg.payload);
         }
     }

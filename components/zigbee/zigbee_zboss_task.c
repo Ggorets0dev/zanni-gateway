@@ -259,21 +259,20 @@ void zigbee_zboss_task(void *pvParameters)
 
     zanni_zigbee_init();
 
-    // Set channels for search (11-26)
     ezb_bdb_set_primary_channel_set(ZIGBEE_CHANNEL_MASK); 
 
-    // 1. Creating global device
     ezb_af_device_desc_t dev_desc = ezb_af_create_device_desc();
     
     zigbee_init_endpoints(dev_desc);
     
     ezb_af_device_desc_register(dev_desc);
 
-    // 5. Регистрируем обработчики событий
     ezb_zcl_core_action_handler_register(zb_action_handler);
     ezb_app_signal_add_handler(app_signal_handler);
 
-    // 7. Запускаем главный цикл ZBOSS
     esp_zigbee_start(false);
+
+    zanni_zb_pm_setup();
+
     esp_zigbee_launch_mainloop();
 }

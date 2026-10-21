@@ -2,6 +2,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "esp_pm.h"
 #include "nvs_flash.h"
 #include "esp_random.h"
 
@@ -29,12 +30,23 @@ static void zanni_nvs_flash_init(void)
     }
 }
 
+static void zanni_pm_setup(void) 
+{
+    esp_pm_config_t pm_config = 
+    {
+        .max_freq_mhz = 80,
+        .min_freq_mhz = 40,
+        .light_sleep_enable = false
+    };
+    ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
+    ESP_LOGI(TAG, "Global PM configuration is completed");
+}
+
 void app_main(void)
 {
     bool is_inited = true;
 
-    ESP_LOGI(TAG, "Starting FreeRTOS test tasks...");
-
+    zanni_pm_setup();
     zanni_nvs_flash_init();
 
     is_inited &= status_queue_init();
@@ -47,6 +59,8 @@ void app_main(void)
         ESP_LOGE(TAG, "Failed to init some FreeRTOS objects");
         esp_restart();
     }
+
+    ESP_LOGI(TAG, "Starting FreeRTOS tasks...");
 
     MODULE_START(MODULE_STATUS, status_task, NULL);
     MODULE_START(MODULE_ZIGBEE_ZBOSS, zigbee_zboss_task, NULL);

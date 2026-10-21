@@ -1,4 +1,5 @@
 #include <esp_zigbee.h>
+#include "esp_ieee802154.h"
 #include "ezbee/zha.h"
 #include "ezbee/zcl.h"
 #include "ezbee/bdb.h"
@@ -9,7 +10,8 @@
 #include "netmap.h"
 #include "module.h"
 
-#define TAG     g_module_config[MODULE_ZIGBEE_ZBOSS].tag
+#define TAG                 g_module_config[MODULE_ZIGBEE_ZBOSS].tag
+#define ZIGBEE_TX_POWER     10
 
 static char s_kojima_manuf[] = "\x10""_TZ3210_b3kiq1i0";
 static char s_kojima_model[] = "\x07""TS0505B";
@@ -59,9 +61,16 @@ void zigbee_apply_spoofing(uint8_t endpoint)
         s_kojima_manuf + 1, s_kojima_model + 1, r1, r2);
 }
 
+void zanni_zb_pm_setup(void) 
+{
+    esp_ieee802154_set_txpower(ZIGBEE_TX_POWER);
+    ESP_LOGI(TAG, "Zigbee PM configuration is completed");
+}
+
 void zanni_zigbee_init(void)
 {
     esp_coex_wifi_i154_enable();
+    esp_coex_preference_set(ESP_COEX_PREFER_BALANCE);
 
     esp_zigbee_config_t config = 
     {
