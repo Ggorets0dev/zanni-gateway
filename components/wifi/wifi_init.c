@@ -10,6 +10,9 @@
 #include "system_events.h"
 #include "module.h"
 
+/**
+ * @brief Maximum number of Wi-Fi reconnection attempts before declaring fault.
+ */
 #define CONNECT_RETRY_MAX   10
 
 #ifndef WIFI_SSID
@@ -20,9 +23,19 @@
 #error "WIFI PASS is not specified during build"
 #endif
 
+/**
+ * @brief Logging tag for Wi-Fi initialization.
+ */
 #define TAG                     g_module_config[MODULE_WIFI].tag
+
+/**
+ * @brief Maximum transmit power level for Wi-Fi modem.
+ */
 #define WIFI_MODEM_TX_POWER     40
 
+/**
+ * @brief Configures Wi-Fi power management settings including max TX power and power save mode.
+ */
 static void zanni_wifi_pm_setup(void) 
 {
     ESP_ERROR_CHECK(esp_wifi_set_max_tx_power(WIFI_MODEM_TX_POWER));
@@ -30,6 +43,13 @@ static void zanni_wifi_pm_setup(void)
     ESP_LOGI(TAG, "WIFI PM configuration is completed");
 }
 
+/**
+ * @brief ESP event loop callback handler for Wi-Fi and IP events.
+ * @param arg User data passed to the event handler (unused).
+ * @param event_base Event base identifier (WIFI_EVENT or IP_EVENT).
+ * @param event_id Specific event identifier.
+ * @param event_data Pointer to event-specific metadata.
+ */
 static void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data) 
 {
@@ -70,6 +90,9 @@ static void event_handler(void* arg, esp_event_base_t event_base,
     }
 }
 
+/**
+ * @brief Initializes network interface, Wi-Fi driver, event handlers, and connects in station mode.
+ */
 void zanni_wifi_init(void)
 {
     ESP_ERROR_CHECK(esp_netif_init());

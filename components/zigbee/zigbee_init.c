@@ -10,12 +10,25 @@
 #include "netmap.h"
 #include "module.h"
 
+/**
+ * @brief Logging tag for Zigbee initialization and ZBOSS task.
+ */
 #define TAG                 g_module_config[MODULE_ZIGBEE_ZBOSS].tag
+
+/**
+ * @brief Transmit power in dBm for IEEE 802.15.4 Zigbee radio.
+ */
 #define ZIGBEE_TX_POWER     10
 
 static char s_kojima_manuf[] = "\x10""_TZ3210_b3kiq1i0";
 static char s_kojima_model[] = "\x07""TS0505B";
 
+/**
+ * @brief Creates a ZHA color dimmable light endpoint descriptor and sets cluster attributes.
+ * @param basic Pointer to store the basic cluster descriptor.
+ * @param desc Pointer to store the created endpoint descriptor.
+ * @param ep_id Zigbee endpoint identifier.
+ */
 static void create_kojima_light_endpoint(ezb_zcl_cluster_desc_t* basic, ezb_af_ep_desc_t* desc, uint8_t ep_id)
 {
     ezb_zha_color_dimmable_light_config_t light_cfg = EZB_ZHA_COLOR_DIMMABLE_LIGHT_CONFIG();
@@ -36,6 +49,10 @@ static void create_kojima_light_endpoint(ezb_zcl_cluster_desc_t* basic, ezb_af_e
     }
 }
 
+/**
+ * @brief Applies manufacturer name and model identifier spoofing attributes on the specified endpoint.
+ * @param endpoint Zigbee endpoint identifier.
+ */
 void zigbee_apply_spoofing(uint8_t endpoint)
 {
     esp_err_t r1 = ezb_zcl_set_attr_value(
@@ -61,12 +78,18 @@ void zigbee_apply_spoofing(uint8_t endpoint)
         s_kojima_manuf + 1, s_kojima_model + 1, r1, r2);
 }
 
+/**
+ * @brief Configures IEEE 802.15.4 radio power management and transmit power.
+ */
 void zanni_zb_pm_setup(void) 
 {
     esp_ieee802154_set_txpower(ZIGBEE_TX_POWER);
     ESP_LOGI(TAG, "Zigbee PM configuration is completed");
 }
 
+/**
+ * @brief Initializes coexistence and configures the Zigbee stack as a router device.
+ */
 void zanni_zigbee_init(void)
 {
     esp_coex_wifi_i154_enable();
@@ -96,6 +119,13 @@ void zanni_zigbee_init(void)
     esp_zigbee_init(&config);
 }
 
+/**
+ * @brief Initializes Zigbee endpoint clusters and registers them in the device descriptor.
+ * @param dev_desc Application framework device descriptor.
+ * @return Status code.
+ * @retval 0 Endpoints successfully initialized.
+ * @retval 1 Basic cluster creation failed.
+ */
 int zigbee_init_endpoints(ezb_af_device_desc_t dev_desc)
 {
     ezb_zcl_cluster_desc_t basic = NULL;

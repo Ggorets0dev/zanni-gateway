@@ -1,8 +1,17 @@
 #pragma once
 
+/**
+ * @brief Macro to instantiate and run a FreeRTOS task corresponding to the specified module ID.
+ * @param id Module identifier from module_e.
+ * @param task_fc Pointer to the task entry function.
+ * @param arg Pointer to parameters passed to the task function.
+ */
 #define MODULE_START(id, task_fc, arg) \
     xTaskCreate(&task_fc, g_module_config[id].tag, g_module_config[id].stack_size, (arg), g_module_config[id].priority, NULL);
 
+/**
+ * @brief Enumeration of system module identifiers.
+ */
 typedef enum
 {
     MODULE_STATUS,
@@ -15,6 +24,9 @@ typedef enum
     MODULE_MAX
 } module_e;
 
+/**
+ * @brief Configuration descriptor for a module FreeRTOS task.
+ */
 typedef struct
 {
     const char *tag;

@@ -24,6 +24,9 @@
 
 static const char *TAG = "main";
 
+/**
+ * @brief Initializes NVS (Non-Volatile Storage) flash, erasing and re-initializing if storage is corrupted or full.
+ */
 static void zanni_nvs_flash_init(void)
 {
     esp_err_t err = nvs_flash_init();
@@ -35,6 +38,9 @@ static void zanni_nvs_flash_init(void)
     }
 }
 
+/**
+ * @brief Configures global dynamic frequency scaling and power management parameters.
+ */
 static void zanni_pm_setup(void) 
 {
     esp_pm_config_t pm_config = 
@@ -47,6 +53,9 @@ static void zanni_pm_setup(void)
     ESP_LOGI(TAG, "Global PM configuration is completed");
 }
 
+/**
+ * @brief Main application entry point initializing power management, NVS, FreeRTOS queues, and launching system tasks.
+ */
 void app_main(void)
 {
     bool is_inited = true;

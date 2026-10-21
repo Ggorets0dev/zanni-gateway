@@ -20,11 +20,21 @@
 #include "system_events.h"
 #include "dev_state.h"
 
+/**
+ * @brief Primary 2.4 GHz 802.15.4 channel mask (channels 11 to 26).
+ */
 #define ZIGBEE_CHANNEL_MASK     0x07FFF800U
+
+/**
+ * @brief Logging tag for Zigbee ZBOSS task.
+ */
 #define TAG                     g_module_config[MODULE_ZIGBEE_ZBOSS].tag
 
 static uint8_t s_current_level;
 
+/**
+ * @brief Sets default local brightness and on/off states and reports them to coordinator.
+ */
 static void setup_all_local_states(void)
 {
     s_current_level = 25;
@@ -32,11 +42,20 @@ static void setup_all_local_states(void)
     zigbee_update_on_off(1, true, true);
 }
 
+/**
+ * @brief Applies manufacturer name and model ID spoofing on endpoint 1.
+ */
 static void setup_all_spoofing(void)
 {
     zigbee_apply_spoofing(1);
 }
 
+/**
+ * @brief Callback handler for Zigbee BDB, ZDO, and NWK application signals.
+ * @param signal Pointer to application signal structure.
+ * @return Boolean status indicator.
+ * @retval false Default return indicating signal processing handled.
+ */
 static bool app_signal_handler(const ezb_app_signal_t *signal) 
 {
     ezb_app_signal_type_t sig_type = ezb_app_signal_get_type(signal);
@@ -131,6 +150,10 @@ static bool app_signal_handler(const ezb_app_signal_t *signal)
     return false;
 }
 
+/**
+ * @brief Processes incoming Zigbee level commands, maps levels to virtual switches, and enqueues commands.
+ * @param level Received Zigbee brightness level.
+ */
 static void process_level_command(const uint8_t level)
 {
     if (level == 0)
@@ -200,13 +223,18 @@ static void process_level_command(const uint8_t level)
         }
     }
 
-    const uint8_t report_level = zigbee_pct_to_level(pct);
+    // const uint8_t report_level = zigbee_pct_to_level(pct);
     s_current_level = level;
 
     // zigbee_update_brightness(1, report_level, false);
     // zigbee_update_on_off(1, true, false);
 }
 
+/**
+ * @brief Callback handler for Zigbee ZCL core actions such as attribute changes.
+ * @param callback_id Action callback identifier.
+ * @param message Pointer to message data associated with the callback.
+ */
 void zb_action_handler(ezb_zcl_core_action_callback_id_t callback_id, void *message) 
 {
     switch (callback_id) 
@@ -251,6 +279,10 @@ void zb_action_handler(ezb_zcl_core_action_callback_id_t callback_id, void *mess
     }
 }
 
+/**
+ * @brief FreeRTOS task function running the Zigbee stack (ZBOSS) main event loop.
+ * @param pvParameters Pointer to task parameters (unused).
+ */
 void zigbee_zboss_task(void *pvParameters) 
 {
     ESP_LOGI(TAG, "Waiting for Wi-Fi connection before starting Zigbee...");

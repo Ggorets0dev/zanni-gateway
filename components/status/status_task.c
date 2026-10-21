@@ -12,13 +12,29 @@
 #include "status_queue.h"
 #include "system_events.h"
 
+/**
+ * @brief Logging tag for the status LED task.
+ */
 #define TAG                             g_module_config[MODULE_STATUS].tag
 
+/**
+ * @brief Blinking period in milliseconds for persistent global statuses.
+ */
 #define STATUS_TASK_GLOBAL_PERIOD_MS    800
+
+/**
+ * @brief Fast blinking period in milliseconds for transient communication events.
+ */
 #define STATUS_TASK_EVENT_PERIOD_MS     100
 
+/**
+ * @brief GPIO pin number connected to the WS2812 addressable RGB LED data line.
+ */
 #define LED_GPIO                        8
 
+/**
+ * @brief Maximum intensity limit for RGB LED color channels to prevent blinding brightness.
+ */
 #define CLR_LVL_LIMIT                   15
 
 // ========== LED SETTINGS
@@ -32,6 +48,13 @@ const uint8_t led_clr_lvls[MODULE_STATUS_MAX][3] =
 };
 // ==========
 
+/**
+ * @brief Checks whether a given status code corresponds to a transient communication event.
+ * @param status Module status to evaluate.
+ * @return True if status represents RX or TX event, false otherwise.
+ * @retval true Status is MODULE_STATUS_RX or MODULE_STATUS_TX.
+ * @retval false Status is another module status.
+ */
 static bool is_status_event(module_status_e status)
 {
     if (status == MODULE_STATUS_RX || status == MODULE_STATUS_TX)
@@ -42,6 +65,10 @@ static bool is_status_event(module_status_e status)
     return false;
 }
 
+/**
+ * @brief FreeRTOS task function for managing the RGB status LED indication.
+ * @param pvParameter Pointer to task parameters (unused).
+ */
 void status_task(void *pvParameter)
 {
     module_status_e curr_status = MODULE_STATUS_CONF;

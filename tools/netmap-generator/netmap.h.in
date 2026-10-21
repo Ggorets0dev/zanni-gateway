@@ -2,7 +2,14 @@
 
 #include "zanni_protocol.h"
 
+/**
+ * @brief Total number of remote nodes configured in the network map.
+ */
 #define NODES_COUNT @NODES_COUNT
+
+/**
+ * @brief Total number of virtual devices configured in the network map.
+ */
 #define DEVS_COUNT  @DEVS_COUNT
 
 #if NODES_COUNT <= 0 || NODES_COUNT > 8
@@ -13,6 +20,9 @@
 #error "DEVS_COUNT must be in range [0;32]"
 #endif
 
+/**
+ * @brief Structure representing a remote network node configuration.
+ */
 typedef struct
 {
     char ip[16];
@@ -20,6 +30,9 @@ typedef struct
     int id;
 } zanni_node_t;
 
+/**
+ * @brief Structure representing a virtual device mapping.
+ */
 typedef struct
 {
     char tag[32];
@@ -39,6 +52,12 @@ static const zanni_virt_dev_t zanni_virt_devs[DEVS_COUNT] =
     @DEVS
 };
 
+/**
+ * @brief Searches for a virtual device index in the network map by tag.
+ * @param tag Null-terminated string containing the device tag.
+ * @return Index of the virtual device if found, or -1 otherwise.
+ * @retval -1 Device not found or tag is NULL.
+ */
 static int zanni_virt_dev_find_index(const char *tag)
 {
     if (tag == NULL)

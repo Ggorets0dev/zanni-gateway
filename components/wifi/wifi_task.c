@@ -16,14 +16,40 @@
 #include "status_queue.h"
 #include "zb_state_queue.h"
 
+/**
+ * @brief Logging tag for Wi-Fi task.
+ */
 #define TAG                         g_module_config[MODULE_WIFI].tag
+
+/**
+ * @brief Timeout in milliseconds for receiving messages from network queue.
+ */
 #define WIFI_TASK_READ_DELAY        1000u
+
+/**
+ * @brief Timeout in milliseconds for waiting for Wi-Fi connection event.
+ */
 #define WIFI_TASK_WAIT_DELAY        1000u
 
+/**
+ * @brief TCP keep-alive idle duration in seconds before probes are sent.
+ */
 #define KEEP_ALIVE_IDLE_SEC         20
+
+/**
+ * @brief TCP keep-alive probe interval duration in seconds.
+ */
 #define KEEP_ALIVE_INTERVAL_SEC     10
+
+/**
+ * @brief Number of unanswered TCP keep-alive probes before disconnecting.
+ */
 #define KEEP_ALIVE_ATTEMPTS_CNT     2
 
+/**
+ * @brief Configures TCP keep-alive options on a socket.
+ * @param sock Socket descriptor to configure.
+ */
 static void configure_keepalive(int sock)
 {
     int keep_alive_enable = 1; 
@@ -37,6 +63,13 @@ static void configure_keepalive(int sock)
     setsockopt(sock, IPPROTO_TCP, TCP_KEEPCNT, &keep_count, sizeof(keep_count));
 }
 
+/**
+ * @brief Establishes a TCP socket connection to a specified host and port.
+ * @param host IP address string of the target node.
+ * @param port Port number of the target node.
+ * @return Socket descriptor on success, or -1 on failure.
+ * @retval -1 Connection failed or socket creation failed.
+ */
 static int connect_to_node(const char* host, int port)
 {
     struct sockaddr_in dest_addr;
@@ -71,6 +104,14 @@ static int connect_to_node(const char* host, int port)
     return sock;
 }
 
+/**
+ * @brief Encodes and transmits a Zanni protocol message to a remote node.
+ * @param sock Connected TCP socket descriptor.
+ * @param msg Pointer to the Zanni message to encode and send.
+ * @return True if data was successfully sent, false otherwise.
+ * @retval true Message successfully sent.
+ * @retval false Message send failed.
+ */
 static bool send_req_to_node(const int sock, const zanni_message_t* msg)
 {
     uint8_t buffer[ZANNI_MSG_SIZE] = {0};
@@ -90,6 +131,14 @@ static bool send_req_to_node(const int sock, const zanni_message_t* msg)
     return true;
 }
 
+/**
+ * @brief Receives and decodes a Zanni protocol message from a remote node.
+ * @param sock Connected TCP socket descriptor.
+ * @param msg_out Pointer to destination message structure.
+ * @return True if message was successfully received and decoded, false otherwise.
+ * @retval true Message successfully decoded.
+ * @retval false Receive failed or decode error occurred.
+ */
 static bool recv_resp_from_node(const int sock, zanni_message_t* msg_out)
 {
     uint8_t buffer[ZANNI_MSG_SIZE] = {0};
@@ -107,6 +156,10 @@ static bool recv_resp_from_node(const int sock, zanni_message_t* msg_out)
     return (status == ZANNI_DCD_STATUS_OK);
 }
 
+/**
+ * @brief Closes all open TCP node sockets and resets their descriptors.
+ * @param socks Array of socket descriptors.
+ */
 static void close_connections(int socks[NODES_COUNT])
 {
     for (uint16_t i = 0; i < NODES_COUNT; ++i) 
@@ -118,6 +171,10 @@ static void close_connections(int socks[NODES_COUNT])
     }
 }
 
+/**
+ * @brief FreeRTOS task handling TCP connections to network nodes and forwarding messages between queues and nodes.
+ * @param pvParameter Pointer to task parameters (unused).
+ */
 void wifi_task(void *pvParameter)
 {
     status_msg_t status_msg = 

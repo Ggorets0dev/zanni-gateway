@@ -8,8 +8,15 @@
 #include "zanni_protocol.h"
 #include "zb_state_queue.h"
 
+/**
+ * @brief Logging tag for Zigbee state synchronization task.
+ */
 #define TAG     g_module_config[MODULE_ZIGBEE_STATE].tag
 
+/**
+ * @brief FreeRTOS task function for handling Zigbee state synchronization and reporting.
+ * @param pvParameters Pointer to task parameters (unused).
+ */
 void zigbee_state_task(void *pvParameters) 
 {
     zanni_message_t msg = {0};

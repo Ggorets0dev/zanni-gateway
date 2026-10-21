@@ -11,9 +11,20 @@
 #include "soc/clk_tree_defs.h"
 #include "module.h"
 
+/**
+ * @brief Logging tag for the monitor task.
+ */
 #define TAG                         g_module_config[MODULE_MONITOR].tag
+
+/**
+ * @brief Delay interval in milliseconds between consecutive system status logs.
+ */
 #define MONITOR_TASK_PERIOD_MS      5000
 
+/**
+ * @brief FreeRTOS task function for system diagnostic and resource monitoring.
+ * @param pvParameters Pointer to task parameters (unused).
+ */
 void monitor_task(void *pvParameters)
 {
     uint32_t cpu_freq_hz = 0;

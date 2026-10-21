@@ -12,8 +12,19 @@
 #include "esp_log.h"
 #include "module.h"
 
+/**
+ * @brief Logging tag for Zigbee transport operations.
+ */
 #define TAG     g_module_config[MODULE_ZIGBEE_ZBOSS].tag
 
+/**
+ * @brief Updates an attribute value locally and issues a report attribute command to the coordinator.
+ * @param endpoint Zigbee endpoint identifier.
+ * @param cluster_id Cluster identifier.
+ * @param attr_id Attribute identifier.
+ * @param value_ptr Pointer to attribute data value.
+ * @param is_set_attr Flag indicating whether to set the local attribute before reporting.
+ */
 static void update_attr_and_report(uint8_t endpoint,
                                     uint16_t cluster_id,
                                     uint16_t attr_id,
@@ -68,6 +79,12 @@ static void update_attr_and_report(uint8_t endpoint,
     }
 }
 
+/**
+ * @brief Updates the current level attribute on the Level Control cluster and reports it.
+ * @param endpoint Zigbee endpoint identifier.
+ * @param level Brightness level value (0-254).
+ * @param is_set_attr Flag indicating whether to set the local cluster attribute before reporting.
+ */
 void zigbee_update_brightness(uint8_t endpoint, uint8_t level, bool is_set_attr) 
 {
     update_attr_and_report(endpoint,
@@ -77,6 +94,12 @@ void zigbee_update_brightness(uint8_t endpoint, uint8_t level, bool is_set_attr)
                             is_set_attr);
 }
 
+/**
+ * @brief Updates the On/Off attribute on the On/Off cluster and reports it.
+ * @param endpoint Zigbee endpoint identifier.
+ * @param state Target on/off boolean state.
+ * @param is_set_attr Flag indicating whether to set the local cluster attribute before reporting.
+ */
 void zigbee_update_on_off(uint8_t endpoint, bool state, bool is_set_attr) 
 {
     update_attr_and_report(endpoint,
@@ -86,6 +109,11 @@ void zigbee_update_on_off(uint8_t endpoint, bool state, bool is_set_attr)
                             is_set_attr);
 }
 
+/**
+ * @brief Converts raw Zigbee level (25..254) to brightness percentage (1..100%).
+ * @param level Raw Zigbee level value.
+ * @return Equivalent percentage value.
+ */
 uint8_t zigbee_level_to_pct(const uint8_t level)
 {
     // Convert Zigbee Level (25..254) to app percentage (1..100%).
@@ -112,6 +140,11 @@ uint8_t zigbee_level_to_pct(const uint8_t level)
     return pct;
 }
 
+/**
+ * @brief Converts brightness percentage (1..100%) to raw Zigbee level (25..254).
+ * @param pct Brightness percentage value.
+ * @return Corresponding Zigbee level value.
+ */
 uint8_t zigbee_pct_to_level(const uint8_t pct)
 {
     uint8_t level = (uint8_t)(25 + ((uint32_t)pct * 229 + 99) / 100); 
@@ -123,6 +156,12 @@ uint8_t zigbee_pct_to_level(const uint8_t pct)
     return level;
 }
 
+/**
+ * @brief Converts a virtual device index and boolean state to a corresponding Zigbee level.
+ * @param dev_inx Index of the virtual device.
+ * @param state Boolean state of the device.
+ * @return Corresponding Zigbee level value.
+ */
 uint8_t zigbee_state_to_level(uint8_t dev_inx, bool state)
 {
     const uint8_t pct = BRIGHTNESS_BASE_PCT + (BRIGHTNESS_STEP_PCT * dev_inx * 2) + (!state * BRIGHTNESS_STEP_PCT);
