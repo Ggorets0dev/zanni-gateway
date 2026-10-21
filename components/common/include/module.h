@@ -9,6 +9,9 @@ typedef enum
     MODULE_WIFI,
     MODULE_ZIGBEE_ZBOSS,
     MODULE_ZIGBEE_STATE,
+#ifdef IS_MONITOR_TASK_ENABLED
+    MODULE_MONITOR,
+#endif
     MODULE_MAX
 } module_e;
 
@@ -41,4 +44,11 @@ static const module_config_t g_module_config[MODULE_MAX] =
         .stack_size = 2048,
         .priority = 6,
     },
+#ifdef IS_MONITOR_TASK_ENABLED
+    [MODULE_MONITOR] = {
+        .tag = "MONITOR",
+        .stack_size = 2048,
+        .priority = 3,
+    }
+#endif
 };

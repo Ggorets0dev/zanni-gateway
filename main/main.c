@@ -14,6 +14,11 @@
 #include "module.h"
 #include "zigbee_zboss_task.h"
 #include "zigbee_state_task.h"
+
+#ifdef IS_MONITOR_TASK_ENABLED
+#include "monitor_task.h"
+#endif
+
 #include "wifi_task.h"
 #include "wifi_init.h"
 
@@ -66,4 +71,8 @@ void app_main(void)
     MODULE_START(MODULE_ZIGBEE_ZBOSS, zigbee_zboss_task, NULL);
     MODULE_START(MODULE_ZIGBEE_STATE, zigbee_state_task, NULL);
     MODULE_START(MODULE_WIFI, wifi_task, NULL);
+
+#ifdef IS_MONITOR_TASK_ENABLED
+    MODULE_START(MODULE_MONITOR, monitor_task, NULL);
+#endif
 }
